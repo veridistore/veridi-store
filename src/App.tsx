@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// --- TU NUEVA URL DE IMPLEMENTACIÓN (ACTUALIZADA) ---
+// --- TU URL (RECUERDA QUE AL HACER NUEVA IMPLEMENTACIÓN PUEDE CAMBIAR SI GOOGLE QUIERE, PERO MANTENDRÉ LA ÚLTIMA QUE DISTE) ---
+// SI LA URL CAMBIA AL IMPLEMENTAR, ACTUALÍZALA AQUÍ
 const API_URL = "https://script.google.com/macros/s/AKfycbwF9boFrvkr4GBLQYk2A86IvHy9zPc598mMCf4Rd2EaKpLSbJAXRJN8dfxoC6gNNv04lw/exec";
 
 // --- LOGO ---
 const LOGO_URL = "https://lh3.googleusercontent.com/d/1obDjT8NmSP-Z9L37P7fR5nPVBEdzL-r1";
 
-// --- DATA PERÚ (Base de datos de Ubigeo resumida) ---
+// --- DATA PERÚ ---
 const peruLocations: any = {
   "Lima": {
     "Lima": ["Cercado de Lima","Ate","Barranco","Breña","Carabayllo","Chorrillos","Comas","El Agustino","Independencia","Jesus Maria","La Molina","La Victoria","Lince","Los Olivos","Lurigancho","Lurin","Magdalena del Mar","Miraflores","Pachacamac","Pucusana","Pueblo Libre","Puente Piedra","Punta Hermosa","Punta Negra","Rimac","San Bartolo","San Borja","San Isidro","San Juan de Lurigancho","San Juan de Miraflores","San Luis","San Martin de Porres","San Miguel","Santa Anita","Santa Maria del Mar","Santa Rosa","Santiago de Surco","Surquillo","Villa El Salvador","Villa Maria del Triunfo"],
@@ -88,6 +89,8 @@ export default function App() {
   const [globalSearch, setGlobalSearch] = useState('');
   const [searchTab, setSearchTab] = useState('inventory');
   const [voidSearchTerm, setVoidSearchTerm] = useState('');
+  const [adminProductSearch, setAdminProductSearch] = useState('');
+  const [adminExpenseSearch, setAdminExpenseSearch] = useState('');
 
   // Estados Formularios
   const [newProduct, setNewProduct] = useState<any>({ 
@@ -234,6 +237,27 @@ export default function App() {
     else { setLoading(false); alert("Venta anulada correctamente"); }
   };
 
+  // --- DELETE PRODUCTS & EXPENSES ---
+  const deleteProduct = async (id: any) => {
+    if (!confirm("⚠️ ¿Estás seguro de eliminar este producto PERMANENTEMENTE del inventario?")) return;
+    setLoading(true);
+    const prevProducts = [...products];
+    setProducts(products.filter(p => p.id !== id));
+    const success = await sendToSheet({ action: 'DELETE_PRODUCT', id: id });
+    if (!success) { setProducts(prevProducts); alert("Error al eliminar producto"); } 
+    else { setLoading(false); alert("Producto eliminado"); }
+  };
+
+  const deleteExpense = async (id: any) => {
+    if (!confirm("¿Eliminar este gasto?")) return;
+    setLoading(true);
+    const prevExpenses = [...expenses];
+    setExpenses(expenses.filter(e => e.id !== id));
+    const success = await sendToSheet({ action: 'DELETE_EXPENSE', id: id });
+    if (!success) { setExpenses(prevExpenses); alert("Error al eliminar gasto"); } 
+    else { setLoading(false); alert("Gasto eliminado"); }
+  };
+
   // --- LOGIC UBIGEO ---
   const handleDepartmentChange = (e: any) => {
     setNewSale({ ...newSale, department: e.target.value, province: '', district: '' });
@@ -241,7 +265,6 @@ export default function App() {
   const handleProvinceChange = (e: any) => {
     setNewSale({ ...newSale, province: e.target.value, district: '' });
   };
-  
   const getProvinces = () => newSale.department && peruLocations[newSale.department] ? Object.keys(peruLocations[newSale.department]) : [];
   const getDistricts = () => newSale.department && newSale.province && peruLocations[newSale.department][newSale.province] ? peruLocations[newSale.department][newSale.province] : [];
 
@@ -263,6 +286,17 @@ export default function App() {
     if (!term) return true; 
     const visualDate = formatDisplayDate(s.date);
     return (visualDate.includes(term) || s.sku.toLowerCase().includes(term) || (s.ticketNo || '').toLowerCase().includes(term) || (s.docNum || '').toLowerCase().includes(term));
+  }).slice().reverse();
+
+  // Filtros Admin
+  const adminFilteredProducts = products.filter(p => {
+    const term = adminProductSearch.toLowerCase();
+    return p.sku.toLowerCase().includes(term) || p.name.toLowerCase().includes(term);
+  }).slice().reverse();
+
+  const adminFilteredExpenses = expenses.filter(e => {
+    const term = adminExpenseSearch.toLowerCase();
+    return e.desc.toLowerCase().includes(term) || e.type.toLowerCase().includes(term) || String(e.amount).includes(term);
   }).slice().reverse();
 
   const handleSkuChange = (e: any) => {
@@ -298,7 +332,6 @@ export default function App() {
         </div>
         <div style={styles.inputGroup}><label style={styles.label}>SKU</label><input style={styles.input} value={newProduct.sku} onChange={(e:any) => setNewProduct({...newProduct, sku: e.target.value})} placeholder="Ej: NK-001" disabled={!!newProduct.id} /></div>
         
-        {/* TITULO ACTUALIZADO A "NOMBRE DEL PRODUCTO" */}
         <div style={styles.inputGroup}><label style={styles.label}>Nombre del Producto</label><input style={styles.input} value={newProduct.name} onChange={(e:any) => setNewProduct({...newProduct, name: e.target.value})} /></div>
         
         <div style={styles.inputGroup}><label style={styles.label}>Tienda Adquisición (USA)</label><input style={styles.input} value={newProduct.store} onChange={(e:any) => setNewProduct({...newProduct, store: e.target.value})} placeholder="Ej: Ross, Macys..." /></div>
@@ -479,13 +512,11 @@ export default function App() {
 
   const renderVoid = () => (
     <div style={{...styles.card}}>
-      <h3 style={{color:'#f87171'}}>⚠️ Zona de Anulación de Ventas</h3>
-      
+      <h3 style={{color:'#f87171'}}>⚠️ Anulación de Ventas (Stock retorna)</h3>
       <div style={{marginBottom: 20}}>
-        <label style={styles.label}>Buscar Venta para Anular (DD/MM/AAAA, Boleta, SKU, DNI):</label>
+        <label style={styles.label}>Buscar Venta (DD/MM/AAAA, Boleta, SKU, DNI):</label>
         <input style={styles.searchBar} placeholder="Ej: 25/12/2023 o Boleta 001..." value={voidSearchTerm} onChange={e => setVoidSearchTerm(e.target.value)} />
       </div>
-
       <div style={{overflowX:'auto'}}>
       <table style={styles.table}>
         <thead><tr><th>Fecha</th><th>Boleta</th><th>Cliente (DNI)</th><th>Producto</th><th>Total</th><th>Acción</th></tr></thead>
@@ -507,6 +538,54 @@ export default function App() {
       </table>
       </div>
     </div>
+  );
+
+  // --- NUEVA VISTA ADMIN DATOS ---
+  const renderAdminVoid = () => (
+      <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
+        {/* ELIMINAR PRODUCTOS */}
+        <div style={{...styles.card, flex: 1}}>
+            <h3 style={{color:'#fb923c'}}>🗑️ Eliminar Producto (Inventario)</h3>
+            <p style={{fontSize:'0.8rem', color:'#94a3b8'}}>Cuidado: Esto borra el producto permanentemente.</p>
+            <input style={styles.searchBar} placeholder="Buscar SKU o Nombre..." value={adminProductSearch} onChange={e => setAdminProductSearch(e.target.value)} />
+            <div style={{overflowY: 'auto', maxHeight: '400px'}}>
+                <table style={styles.table}>
+                    <thead><tr><th>SKU</th><th>Nombre</th><th>Acción</th></tr></thead>
+                    <tbody>
+                        {adminFilteredProducts.map(p => (
+                            <tr key={p.id}>
+                                <td style={styles.td}>{p.sku}</td>
+                                <td style={styles.td}>{p.name}</td>
+                                <td style={styles.td}><button style={styles.btnDelete} onClick={() => deleteProduct(p.id)}>X</button></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {/* ELIMINAR GASTOS */}
+        <div style={{...styles.card, flex: 1}}>
+            <h3 style={{color:'#fb923c'}}>🗑️ Eliminar Gasto</h3>
+            <p style={{fontSize:'0.8rem', color:'#94a3b8'}}>Borra el registro financiero.</p>
+            <input style={styles.searchBar} placeholder="Buscar Concepto o Monto..." value={adminExpenseSearch} onChange={e => setAdminExpenseSearch(e.target.value)} />
+            <div style={{overflowY: 'auto', maxHeight: '400px'}}>
+                <table style={styles.table}>
+                    <thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th><th>Acción</th></tr></thead>
+                    <tbody>
+                        {adminFilteredExpenses.map(e => (
+                            <tr key={e.id}>
+                                <td style={styles.td}>{formatDisplayDate(e.date)}</td>
+                                <td style={styles.td}>{e.desc}</td>
+                                <td style={styles.td}>{e.amount}</td>
+                                <td style={styles.td}><button style={styles.btnDelete} onClick={() => deleteExpense(e.id)}>X</button></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+      </div>
   );
 
   const renderGlobalSearch = () => {
@@ -574,7 +653,8 @@ export default function App() {
             <button style={styles.navBtn(view === 'sales')} onClick={() => setView('sales')}>Ventas</button>
             <button style={styles.navBtn(view === 'expenses')} onClick={() => setView('expenses')}>Gastos</button>
             <button style={styles.navBtn(view === 'search')} onClick={() => setView('search')}>🔍 Búsqueda</button>
-            <button style={{...styles.navBtn(view === 'void'), color:'#f87171', borderColor:'#f87171'}} onClick={() => setView('void')}>Anulaciones</button>
+            <button style={{...styles.navBtn(view === 'admin_void'), color:'#fb923c', borderColor:'#fb923c'}} onClick={() => setView('admin_void')}>Admin Datos</button>
+            <button style={{...styles.navBtn(view === 'void'), color:'#f87171', borderColor:'#f87171'}} onClick={() => setView('void')}>Anular Ventas</button>
           </nav>
         </div>
       </div>
@@ -590,6 +670,7 @@ export default function App() {
       {view === 'sales' && renderSales()}
       {view === 'expenses' && renderExpenses()}
       {view === 'search' && renderGlobalSearch()}
+      {view === 'admin_void' && renderAdminVoid()}
       {view === 'void' && renderVoid()}
     </div>
   );
