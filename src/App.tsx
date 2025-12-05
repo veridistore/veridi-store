@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// --- TU NUEVA URL (ACTUALIZADA) ---
+// --- TU URL ---
 const API_URL = "https://script.google.com/macros/s/AKfycbxL_SNillbnE9-kYqvRsRDg4icmKyPnbXkzjsGP1iF8neVNruDWJCeYA6JNGAtVF8RTXw/exec";
 
 // --- LOGO ---
 const LOGO_URL = "https://lh3.googleusercontent.com/d/1obDjT8NmSP-Z9L37P7fR5nPVBEdzL-r1";
 
-// --- DATA PERÚ (Base de datos de Ubigeo resumida) ---
+// --- DATA PERÚ ---
 const peruLocations: any = {
   "Lima": {
     "Lima": ["Cercado de Lima","Ate","Barranco","Breña","Carabayllo","Chorrillos","Comas","El Agustino","Independencia","Jesus Maria","La Molina","La Victoria","Lince","Los Olivos","Lurigancho","Lurin","Magdalena del Mar","Miraflores","Pachacamac","Pucusana","Pueblo Libre","Puente Piedra","Punta Hermosa","Punta Negra","Rimac","San Bartolo","San Borja","San Isidro","San Juan de Lurigancho","San Juan de Miraflores","San Luis","San Martin de Porres","San Miguel","Santa Anita","Santa Maria del Mar","Santa Rosa","Santiago de Surco","Surquillo","Villa El Salvador","Villa Maria del Triunfo"],
@@ -55,6 +55,7 @@ const styles = {
   label: { display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9rem' },
   inputWrapper: { display: 'flex', gap: '10px' },
   input: { width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: 'white', color: '#0f172a', flexGrow: 1 },
+  inputDisabled: { width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #334155', background: '#334155', color: '#94a3b8', flexGrow: 1, cursor: 'not-allowed' },
   textarea: { width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: 'white', color: '#0f172a', minHeight: '60px' },
   select: { padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: 'white', color: '#0f172a', width: '100%' },
   selectCurrency: { padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: '#334155', color: 'white', fontWeight: 'bold', cursor: 'pointer' },
@@ -99,7 +100,7 @@ export default function App() {
     size: '', color: '', model: '',
     customerName: '', docType: 'DNI', docNum: '', sex: 'M', phone: '', email: '', 
     batchId: '', receiverType: 'Mismo Comprador', receiverName: '', receiverDoc: '', receiverPhone: '',
-    destination: 'Lima Metropolitana', shippingCost: '', address: '',
+    destination: 'Lima Metropolitana', shippingCost: '', address: '', reference: '', // Nuevo campo reference
     department: '', province: '', district: '' 
   }); 
   
@@ -108,6 +109,7 @@ export default function App() {
   });
 
   const fileInputRef = useRef<any>(null);
+  const foundProduct = products.find(p => p.sku === newSale.sku);
 
   useEffect(() => {
     fetch(API_URL).then(res => res.json()).then(data => {
@@ -203,7 +205,7 @@ export default function App() {
       date: getToday(), sku: '', price: '', currency: 'PEN', ticketNo: '', description: '', notes: '', size: '', color: '', model: '', 
       customerName: '', docType: 'DNI', docNum: '', sex: 'M', phone: '', email: '', 
       batchId: '', receiverType: 'Mismo Comprador', receiverName: '', receiverDoc: '', receiverPhone: '', 
-      destination: 'Lima Metropolitana', shippingCost: '', address: '',
+      destination: 'Lima Metropolitana', shippingCost: '', address: '', reference: '',
       department: '', province: '', district: '' 
     });
 
@@ -279,7 +281,6 @@ export default function App() {
   const totalExpensesPEN = expenses.reduce((acc, e) => acc + toPEN(e.amount, e.currency, e.exchangeRate), 0);
   const grossProfit = totalSalesPEN - totalCOGSPEN;
   const netProfit = grossProfit - totalExpensesPEN;
-  const foundProduct = products.find(p => p.sku === newSale.sku);
 
   if (initialLoad) return <div style={styles.container}><h2 style={{textAlign:'center', marginTop:'20%'}}>Cargando Veridi System...</h2></div>;
 
@@ -296,7 +297,10 @@ export default function App() {
             {newProduct.image && !newProduct.imageBase64 && <div style={{marginTop: 10}}><img src={newProduct.image} style={styles.imagePreview} alt="Current" /></div>}
         </div>
         <div style={styles.inputGroup}><label style={styles.label}>SKU</label><input style={styles.input} value={newProduct.sku} onChange={(e:any) => setNewProduct({...newProduct, sku: e.target.value})} placeholder="Ej: NK-001" disabled={!!newProduct.id} /></div>
-        <div style={styles.inputGroup}><label style={styles.label}>Nombre</label><input style={styles.input} value={newProduct.name} onChange={(e:any) => setNewProduct({...newProduct, name: e.target.value})} /></div>
+        
+        {/* TITULO ACTUALIZADO A "NOMBRE DEL PRODUCTO" */}
+        <div style={styles.inputGroup}><label style={styles.label}>Nombre del Producto</label><input style={styles.input} value={newProduct.name} onChange={(e:any) => setNewProduct({...newProduct, name: e.target.value})} /></div>
+        
         <div style={styles.inputGroup}><label style={styles.label}>Tienda Adquisición (USA)</label><input style={styles.input} value={newProduct.store} onChange={(e:any) => setNewProduct({...newProduct, store: e.target.value})} placeholder="Ej: Ross, Macys..." /></div>
         <div style={styles.grid}>
             <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Talla</label><input style={styles.input} value={newProduct.size} onChange={(e:any) => setNewProduct({...newProduct, size: e.target.value})} placeholder="S, M..." /></div>
@@ -337,7 +341,11 @@ export default function App() {
         <div style={styles.inputGroup}><label style={styles.label}>Fecha Venta</label><input type="date" style={styles.input} value={newSale.date} onChange={(e:any) => setNewSale({...newSale, date: e.target.value})} /></div>
         <div style={styles.sectionTitle}>1. Producto</div>
         <div style={styles.inputGroup}><label style={styles.label}>SKU (Escanear)</label><input style={styles.input} value={newSale.sku} onChange={handleSkuChange} autoFocus placeholder="Escanea aquí..." />
-        {newSale.sku && foundProduct ? <div style={styles.productInfo}>✅ {foundProduct.name} (Stock: {foundProduct.stock})</div> : null}</div>
+        {newSale.sku && foundProduct ? <div style={styles.productInfo}>✅ Producto encontrado</div> : null}</div>
+        
+        {/* NOMBRE DEL PRODUCTO AUTOMATICO (SOLO LECTURA) */}
+        <div style={styles.inputGroup}><label style={styles.label}>Nombre del Producto</label><input style={styles.inputDisabled} value={foundProduct ? foundProduct.name : ''} readOnly placeholder="Se llena automáticamente al ingresar SKU" /></div>
+
         <div style={styles.grid}>
           <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Talla</label><input style={styles.input} value={newSale.size} onChange={(e:any) => setNewSale({...newSale, size: e.target.value})} /></div>
           <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Color</label><input style={styles.input} value={newSale.color} onChange={(e:any) => setNewSale({...newSale, color: e.target.value})} /></div>
@@ -370,7 +378,6 @@ export default function App() {
 
         <div style={styles.sectionTitle}>3. Envío y Orden</div>
         
-        {/* TITULO ACTUALIZADO */}
         <div style={styles.inputGroup}><label style={styles.label}>Compra en conjunto - N° de boleta</label><input style={styles.input} value={newSale.batchId} onChange={(e:any) => setNewSale({...newSale, batchId: e.target.value})} placeholder="Ej: Lote #54" /></div>
         
         <div style={styles.inputGroup}>
@@ -390,7 +397,7 @@ export default function App() {
             </div>
         )}
 
-        {/* SELECTORES DE DESTINO (DEPARTAMENTO - PROVINCIA - DISTRITO) */}
+        {/* UBICACION DETALLADA */}
         <div style={{background: '#334155', padding: 10, borderRadius: 5, marginBottom: 15}}>
             <label style={{...styles.label, color: '#60a5fa', fontWeight: 'bold'}}>Ubicación de Envío</label>
             <div style={styles.grid}>
@@ -417,6 +424,9 @@ export default function App() {
                 </div>
             </div>
             <div style={styles.inputGroup}><label style={styles.label}>Dirección Exacta</label><input style={styles.input} value={newSale.address} onChange={(e:any) => setNewSale({...newSale, address: e.target.value})} placeholder="Av. Principal 123..." /></div>
+            
+            {/* NUEVA PESTAÑA REFERENCIA */}
+            <div style={styles.inputGroup}><label style={styles.label}>Referencia</label><input style={styles.input} value={newSale.reference} onChange={(e:any) => setNewSale({...newSale, reference: e.target.value})} placeholder="Ej: Frente al parque, puerta azul..." /></div>
         </div>
 
         <div style={styles.inputGroup}><label style={styles.label}>Costo Envío (S/)</label><input type="number" style={styles.input} value={newSale.shippingCost} onChange={(e:any) => setNewSale({...newSale, shippingCost: e.target.value})} placeholder="0.00" /></div>
