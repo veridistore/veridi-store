@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// --- TU URL ---
-const API_URL = "https://script.google.com/macros/s/AKfycbxL_SNillbnE9-kYqvRsRDg4icmKyPnbXkzjsGP1iF8neVNruDWJCeYA6JNGAtVF8RTXw/exec";
+// --- TU NUEVA URL DE IMPLEMENTACIÓN (ACTUALIZADA) ---
+const API_URL = "https://script.google.com/macros/s/AKfycbwF9boFrvkr4GBLQYk2A86IvHy9zPc598mMCf4Rd2EaKpLSbJAXRJN8dfxoC6gNNv04lw/exec";
 
 // --- LOGO ---
 const LOGO_URL = "https://lh3.googleusercontent.com/d/1obDjT8NmSP-Z9L37P7fR5nPVBEdzL-r1";
 
-// --- DATA PERÚ ---
+// --- DATA PERÚ (Base de datos de Ubigeo resumida) ---
 const peruLocations: any = {
   "Lima": {
     "Lima": ["Cercado de Lima","Ate","Barranco","Breña","Carabayllo","Chorrillos","Comas","El Agustino","Independencia","Jesus Maria","La Molina","La Victoria","Lince","Los Olivos","Lurigancho","Lurin","Magdalena del Mar","Miraflores","Pachacamac","Pucusana","Pueblo Libre","Puente Piedra","Punta Hermosa","Punta Negra","Rimac","San Bartolo","San Borja","San Isidro","San Juan de Lurigancho","San Juan de Miraflores","San Luis","San Martin de Porres","San Miguel","Santa Anita","Santa Maria del Mar","Santa Rosa","Santiago de Surco","Surquillo","Villa El Salvador","Villa Maria del Triunfo"],
@@ -100,7 +100,7 @@ export default function App() {
     size: '', color: '', model: '',
     customerName: '', docType: 'DNI', docNum: '', sex: 'M', phone: '', email: '', 
     batchId: '', receiverType: 'Mismo Comprador', receiverName: '', receiverDoc: '', receiverPhone: '',
-    destination: 'Lima Metropolitana', shippingCost: '', address: '', reference: '', // Nuevo campo reference
+    destination: 'Lima Metropolitana', shippingCost: '', address: '', reference: '',
     department: '', province: '', district: '' 
   }); 
   
