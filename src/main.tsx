@@ -1,7 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './style.css'; // Si tienes un archivo css, sino borra esta línea
+
+// LA LÍNEA DE CSS FUE ELIMINADA PORQUE CAUSABA EL ERROR
 
 const rootElement = document.getElementById('root');
 const root = ReactDOM.createRoot(rootElement!);
