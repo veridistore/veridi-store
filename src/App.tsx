@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
-// --- TU NUEVA URL ---
+// --- TU URL ACTUALIZADA ---
 const API_URL = "https://script.google.com/macros/s/AKfycbwdEkqFStb5p56VEsNj40w-cVYVrXbUfuwvrUWyYTkwWACZG8yuvELQ3A9nZoTdltkhbw/exec";
 
 // --- LOGO ---
@@ -30,8 +30,10 @@ const styles = {
   inputWrapper: { display: 'flex', gap: '10px' },
   input: { width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: 'white', color: '#0f172a', flexGrow: 1 },
   textarea: { width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: 'white', color: '#0f172a', minHeight: '60px' },
+  select: { padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: 'white', color: '#0f172a', width: '100%' },
   selectCurrency: { padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: '#334155', color: 'white', fontWeight: 'bold', cursor: 'pointer' },
   btnPrimary: { width: '100%', padding: '12px', background: '#1d4ed8', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' },
+  btnWarning: { width: '100%', padding: '12px', background: '#f59e0b', color: 'black', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' },
   btnDelete: { padding: '5px 10px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '0.8rem' },
   table: { width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '0.9rem' },
   th: { textAlign: 'left', padding: '10px', borderBottom: '1px solid #334155', color: '#94a3b8' },
@@ -39,6 +41,9 @@ const styles = {
   statCard: { flex: 1, backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #334155', minWidth: '200px' },
   grid: { display: 'flex', gap: '20px', flexWrap: 'wrap' },
   productInfo: { marginTop: '5px', fontSize: '0.9rem', color: '#4ade80' },
+  sectionTitle: { borderBottom: '1px solid #475569', paddingBottom: '5px', marginBottom: '15px', color: '#60a5fa', fontWeight: 'bold' },
+  imagePreview: { width: '50px', height: '50px', objectFit: 'cover', borderRadius: '5px' },
+  searchBar: { padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: '#0f172a', color: 'white', marginBottom: '20px', width: '100%' }
 };
 
 export default function App() {
@@ -48,14 +53,33 @@ export default function App() {
   const [exchangeRate, setExchangeRate] = useState<any>(3.75); 
   const [logoError, setLogoError] = useState(false);
 
-  // USAMOS <any[]> PARA EVITAR ERRORES DE TYPESCRIPT
+  // Datos
   const [products, setProducts] = useState<any[]>([]);
   const [sales, setSales] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   
-  const [newProduct, setNewProduct] = useState<any>({ date: getToday(), name: '', sku: '', category: '', cost: '', stock: '', currency: 'PEN', description: '', notes: '', size: '', color: '', model: '' });
-  const [newSale, setNewSale] = useState<any>({ date: getToday(), sku: '', price: '', currency: 'PEN', ticketNo: '', description: '', notes: '', size: '', color: '', model: '' }); 
-  const [newExpense, setNewExpense] = useState<any>({ date: getToday(), desc: '', amount: '', type: 'Alimentación', currency: 'PEN', notes: '' });
+  // Filtros de búsqueda para ventas
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Estados Formularios
+  const [newProduct, setNewProduct] = useState<any>({ 
+    id: null, date: getToday(), name: '', sku: '', category: '', cost: '', stock: '', currency: 'PEN', 
+    description: '', notes: '', size: '', color: '', model: '', image: '', imageBase64: '' 
+  });
+  
+  const [newSale, setNewSale] = useState<any>({ 
+    date: getToday(), sku: '', price: '', currency: 'PEN', ticketNo: '', description: '', notes: '', 
+    size: '', color: '', model: '',
+    customerName: '', docType: 'DNI', docNum: '', sex: 'M', phone: '',
+    batchId: '', receiverType: 'Mismo Comprador', receiverName: '', receiverDoc: '', receiverPhone: '',
+    destination: 'Lima Metropolitana', shippingCost: ''
+  }); 
+  
+  const [newExpense, setNewExpense] = useState<any>({ 
+    date: getToday(), desc: '', amount: '', type: 'Seguro', currency: 'PEN', notes: '' 
+  });
+
+  const fileInputRef = useRef<any>(null);
 
   useEffect(() => {
     fetch(API_URL).then(res => res.json()).then(data => {
@@ -71,21 +95,57 @@ export default function App() {
     } catch (error) { console.error(error); setLoading(false); alert("Error de conexión"); return false; }
   };
 
-  const toPEN = (amount: any, currency: string, rate = exchangeRate) => {
-    const val = parseFloat(amount || 0);
-    return currency === 'USD' ? val * rate : val;
+  // Convertir imagen a Base64 y redimensionar (para no saturar Google Apps Script)
+  const handleImageUpload = (e: any) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event: any) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          const maxWidth = 600; // Redimensionar a max 600px
+          const scaleSize = maxWidth / img.width;
+          canvas.width = maxWidth;
+          canvas.height = img.height * scaleSize;
+          ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7); // Compresión JPEG 70%
+          setNewProduct({ ...newProduct, imageBase64: compressedBase64 });
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const addProduct = async () => {
     if(!newProduct.name || !newProduct.sku) return alert("Faltan datos");
-    const productData = { ...newProduct, id: Date.now(), cost: parseFloat(newProduct.cost), stock: parseInt(newProduct.stock), exchangeRate };
+    const isEdit = !!newProduct.id;
+    const action = isEdit ? 'UPDATE_PRODUCT' : 'ADD_PRODUCT';
+    const productData = { ...newProduct, id: newProduct.id || Date.now(), cost: parseFloat(newProduct.cost), stock: parseInt(newProduct.stock), exchangeRate };
     
-    const prevProducts = [...products];
-    setProducts([...products, productData]);
-    setNewProduct({ ...newProduct, name: '', sku: '', category: '', cost: '', stock: '', currency: 'PEN', description: '', notes: '', size: '', color: '', model: '' });
+    // Actualización optimista
+    let updatedProducts;
+    if (isEdit) {
+      updatedProducts = products.map(p => p.id === productData.id ? productData : p);
+    } else {
+      updatedProducts = [...products, productData];
+    }
+    setProducts(updatedProducts);
+    
+    // Limpiar form
+    setNewProduct({ id: null, date: getToday(), name: '', sku: '', category: '', cost: '', stock: '', currency: 'PEN', description: '', notes: '', size: '', color: '', model: '', image: '', imageBase64: '' });
+    if(fileInputRef.current) fileInputRef.current.value = "";
 
-    const success = await sendToSheet({ action: 'ADD_PRODUCT', ...productData });
-    if (!success) setProducts(prevProducts);
+    const success = await sendToSheet({ action, ...productData });
+    if (!success && !isEdit) setProducts(products); // Revertir solo si era nuevo
+  };
+
+  const editProduct = (prod: any) => {
+    setNewProduct(prod);
+    // Scroll arriba
+    window.scrollTo(0,0);
   };
 
   const addSale = async () => {
@@ -106,12 +166,23 @@ export default function App() {
     };
 
     const prevSales = [...sales]; const prevProducts = [...products];
+    const prevExpenses = [...expenses];
+
     setSales([...sales, saleData]);
     setProducts(products.map(p => p.sku === newSale.sku ? { ...p, stock: p.stock - qty } : p));
-    setNewSale({ ...newSale, sku: '', price: '', currency: 'PEN', ticketNo: '', description: '', notes: '', size: '', color: '', model: '' });
+    
+    // Si hay envio, agregar gasto visualmente también
+    if(saleData.shippingCost && parseFloat(saleData.shippingCost) > 0) {
+       setExpenses([...expenses, {
+         id: Date.now(), date: saleData.date, type: 'Envío', desc: `Envío Boleta ${saleData.ticketNo}`, 
+         amount: parseFloat(saleData.shippingCost), currency: saleData.currency, exchangeRate: saleData.exchangeRate
+       }]);
+    }
+
+    setNewSale({ date: getToday(), sku: '', price: '', currency: 'PEN', ticketNo: '', description: '', notes: '', size: '', color: '', model: '', customerName: '', docType: 'DNI', docNum: '', sex: 'M', phone: '', batchId: '', receiverType: 'Mismo Comprador', receiverName: '', receiverDoc: '', receiverPhone: '', destination: 'Lima Metropolitana', shippingCost: '' });
 
     const success = await sendToSheet({ action: 'ADD_SALE', ...saleData });
-    if (!success) { setSales(prevSales); setProducts(prevProducts); alert("Error guardando venta"); }
+    if (!success) { setSales(prevSales); setProducts(prevProducts); setExpenses(prevExpenses); alert("Error guardando venta"); }
   };
 
   const addExpense = async () => {
@@ -120,32 +191,22 @@ export default function App() {
 
     const prevExpenses = [...expenses];
     setExpenses([...expenses, expenseData]);
-    setNewExpense({ ...newExpense, desc: '', amount: '', type: 'Alimentación', currency: 'PEN', notes: '' });
+    setNewExpense({ ...newExpense, desc: '', amount: '', type: 'Seguro', currency: 'PEN', notes: '' });
 
     const success = await sendToSheet({ action: 'ADD_EXPENSE', ...expenseData });
     if (!success) setExpenses(prevExpenses);
   };
 
-  const voidSale = async (saleId: any, sku: string, qty: any) => {
-    if (!confirm("¿Seguro que deseas anular esta venta? El stock será devuelto.")) return;
-    setLoading(true);
-    
-    const prevSales = [...sales];
-    const prevProducts = [...products];
-
-    setSales(sales.filter(s => s.id !== saleId));
-    setProducts(products.map(p => p.sku === sku ? { ...p, stock: p.stock + parseInt(qty) } : p));
-
-    const success = await sendToSheet({ action: 'DELETE_SALE', id: saleId, sku, qty });
-    if (!success) {
-      setSales(prevSales);
-      setProducts(prevProducts);
-      alert("Error al anular venta");
-    } else {
-      setLoading(false);
-      alert("Venta anulada correctamente");
-    }
-  };
+  // Filtrado de Ventas
+  const filteredSales = sales.filter(s => {
+    const term = searchTerm.toLowerCase();
+    return (
+      s.date.includes(term) ||
+      s.sku.toLowerCase().includes(term) ||
+      (s.ticketNo || '').toLowerCase().includes(term) ||
+      (s.destination || '').toLowerCase().includes(term)
+    );
+  }).slice().reverse();
 
   const handleSkuChange = (e: any) => {
     const val = e.target.value;
@@ -159,6 +220,12 @@ export default function App() {
     })); 
   };
 
+  const toPEN = (amount: any, currency: string, rate = exchangeRate) => {
+    const val = parseFloat(amount || 0);
+    return currency === 'USD' ? val * rate : val;
+  };
+  
+  // Totales
   const totalSalesPEN = sales.reduce((acc, s) => acc + toPEN(s.total, s.currency, s.exchangeRate), 0);
   const totalCOGSPEN = sales.reduce((acc, s) => {
     const p = products.find(prod => prod.sku === s.sku);
@@ -171,31 +238,30 @@ export default function App() {
 
   if (initialLoad) return <div style={styles.container}><h2 style={{textAlign:'center', marginTop:'20%'}}>Cargando Veridi System...</h2></div>;
 
-  const renderDashboard = () => (
-    <div>
-      <h2 style={{marginBottom: '20px'}}>Resumen Financiero</h2>
-      <div style={styles.grid}>
-        <div style={styles.statCard}><div style={styles.label}>Ventas Totales</div><div style={{fontSize: '1.8rem', fontWeight: 'bold'}}>S/ {totalSalesPEN.toFixed(2)}</div></div>
-        <div style={styles.statCard}><div style={styles.label}>Utilidad Bruta</div><div style={{fontSize: '1.8rem', fontWeight: 'bold', color: '#4ade80'}}>S/ {grossProfit.toFixed(2)}</div></div>
-        <div style={styles.statCard}><div style={styles.label}>Gastos Totales</div><div style={{fontSize: '1.8rem', fontWeight: 'bold', color: '#f87171'}}>S/ {totalExpensesPEN.toFixed(2)}</div></div>
-        <div style={styles.statCard}><div style={styles.label}>Utilidad Neta</div><div style={{fontSize: '1.8rem', fontWeight: 'bold', color: netProfit >= 0 ? '#4ade80' : '#f87171'}}>S/ {netProfit.toFixed(2)}</div></div>
-      </div>
-    </div>
-  );
-
+  // --- VISTAS ---
+  
   const renderInventory = () => (
     <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
       <div style={{...styles.card, flex: 1}}>
-        <h3>Agregar Producto</h3>
+        <h3>{newProduct.id ? 'Editar Producto' : 'Agregar Producto'}</h3>
         <div style={styles.inputGroup}><label style={styles.label}>Fecha Ingreso</label><input type="date" style={styles.input} value={newProduct.date} onChange={(e:any) => setNewProduct({...newProduct, date: e.target.value})} /></div>
-        <div style={styles.inputGroup}><label style={styles.label}>SKU</label><input style={styles.input} value={newProduct.sku} onChange={(e:any) => setNewProduct({...newProduct, sku: e.target.value})} placeholder="Ej: NK-001" /></div>
+        
+        {/* FOTO */}
+        <div style={styles.inputGroup}>
+            <label style={styles.label}>Foto del Producto</label>
+            <input type="file" ref={fileInputRef} onChange={handleImageUpload} style={{color: 'white'}} accept="image/*" />
+            {newProduct.imageBase64 && <div style={{marginTop: 10}}><img src={newProduct.imageBase64} style={styles.imagePreview} alt="Preview" /> (Listo para subir)</div>}
+            {newProduct.image && !newProduct.imageBase64 && <div style={{marginTop: 10}}><img src={newProduct.image} style={styles.imagePreview} alt="Current" /> (Actual)</div>}
+        </div>
+
+        <div style={styles.inputGroup}><label style={styles.label}>SKU</label><input style={styles.input} value={newProduct.sku} onChange={(e:any) => setNewProduct({...newProduct, sku: e.target.value})} placeholder="Ej: NK-001" disabled={!!newProduct.id} /></div>
         <div style={styles.grid}>
-            <div style={{...styles.inputGroup, flex: 2}}><label style={styles.label}>Nombre</label><input style={styles.input} value={newProduct.name} onChange={(e:any) => setNewProduct({...newProduct, name: e.target.value})} /></div>
+            <div style={{...styles.inputGroup, flex: 2}}><label style={styles.label}>Nombre del Producto</label><input style={styles.input} value={newProduct.name} onChange={(e:any) => setNewProduct({...newProduct, name: e.target.value})} /></div>
             <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Talla</label><input style={styles.input} value={newProduct.size} onChange={(e:any) => setNewProduct({...newProduct, size: e.target.value})} placeholder="S, M..." /></div>
         </div>
         <div style={styles.grid}>
-            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Color</label><input style={styles.input} value={newProduct.color} onChange={(e:any) => setNewProduct({...newProduct, color: e.target.value})} placeholder="Ej: Negro" /></div>
-            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Modelo</label><input style={styles.input} value={newProduct.model} onChange={(e:any) => setNewProduct({...newProduct, model: e.target.value})} placeholder="Ej: Slim Fit" /></div>
+            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Color</label><input style={styles.input} value={newProduct.color} onChange={(e:any) => setNewProduct({...newProduct, color: e.target.value})} /></div>
+            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Modelo</label><input style={styles.input} value={newProduct.model} onChange={(e:any) => setNewProduct({...newProduct, model: e.target.value})} /></div>
         </div>
         <div style={styles.inputGroup}><label style={styles.label}>Descripción</label><input style={styles.input} value={newProduct.description} onChange={(e:any) => setNewProduct({...newProduct, description: e.target.value})} /></div>
         <div style={styles.grid}>
@@ -209,47 +275,122 @@ export default function App() {
           <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Stock</label><input type="number" style={styles.input} value={newProduct.stock} onChange={(e:any) => setNewProduct({...newProduct, stock: e.target.value})} /></div>
         </div>
         <div style={styles.inputGroup}><label style={styles.label}>Notas</label><textarea style={styles.textarea} value={newProduct.notes} onChange={(e:any) => setNewProduct({...newProduct, notes: e.target.value})} /></div>
-        <button style={loading ? styles.btnLoading : styles.btnPrimary} onClick={addProduct} disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
+        
+        <button style={loading ? styles.btnLoading : (newProduct.id ? styles.btnWarning : styles.btnPrimary)} onClick={addProduct} disabled={loading}>
+            {loading ? 'Procesando...' : (newProduct.id ? 'Actualizar Producto' : 'Guardar Producto')}
+        </button>
+        {newProduct.id && <button style={{...styles.btnDelete, marginTop: 10, width: '100%'}} onClick={() => setNewProduct({ id: null, date: getToday(), name: '', sku: '', category: '', cost: '', stock: '', currency: 'PEN', description: '', notes: '', size: '', color: '', model: '', image: '', imageBase64: '' })}>Cancelar Edición</button>}
       </div>
+      
       <div style={{...styles.card, flex: 2, overflowX: 'auto'}}>
-        <h3>Inventario</h3>
-        <table style={styles.table}><thead><tr><th>Fecha</th><th>SKU</th><th>Prod</th><th>Talla</th><th>Color</th><th>Stock</th></tr></thead><tbody>{products.map(p => (<tr key={p.id}><td style={styles.td}>{p.date}</td><td style={styles.td}>{p.sku}</td><td style={styles.td}>{p.name}</td><td style={styles.td}>{p.size}</td><td style={styles.td}>{p.color}</td><td style={styles.td}>{p.stock}</td></tr>))}</tbody></table>
+        <h3>Inventario (Click para Editar)</h3>
+        <table style={styles.table}><thead><tr><th>Foto</th><th>SKU</th><th>Prod</th><th>Talla</th><th>Color</th><th>Stock</th></tr></thead>
+        <tbody>{products.map(p => (
+            <tr key={p.id} onClick={() => editProduct(p)} style={{cursor: 'pointer', background: newProduct.id === p.id ? '#334155' : 'transparent'}}>
+                <td style={styles.td}>{p.image ? <img src={p.image} style={styles.imagePreview} /> : '-'}</td>
+                <td style={styles.td}>{p.sku}</td><td style={styles.td}>{p.name}</td><td style={styles.td}>{p.size}</td><td style={styles.td}>{p.color}</td><td style={styles.td}>{p.stock}</td>
+            </tr>
+        ))}</tbody></table>
       </div>
     </div>
   );
 
   const renderSales = () => (
     <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
-      <div style={{...styles.card, flex: 1}}>
+      <div style={{...styles.card, flex: 1.2}}>
         <h3>Nueva Venta</h3>
         <div style={styles.inputGroup}><label style={styles.label}>Fecha Venta</label><input type="date" style={styles.input} value={newSale.date} onChange={(e:any) => setNewSale({...newSale, date: e.target.value})} /></div>
+        
+        {/* PRODUCTO */}
+        <div style={styles.sectionTitle}>1. Producto</div>
         <div style={styles.inputGroup}><label style={styles.label}>SKU (Escanear)</label><input style={styles.input} value={newSale.sku} onChange={handleSkuChange} autoFocus placeholder="Escanea aquí..." />
         {newSale.sku && foundProduct ? <div style={styles.productInfo}>✅ {foundProduct.name} (Stock: {foundProduct.stock})</div> : null}</div>
-        
         <div style={styles.grid}>
-          <div style={{...styles.inputGroup, flex: 2}}><label style={styles.label}>Boleta Nº</label><input style={styles.input} value={newSale.ticketNo} onChange={(e:any) => setNewSale({...newSale, ticketNo: e.target.value})} placeholder="001-..." /></div>
           <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Talla</label><input style={styles.input} value={newSale.size} onChange={(e:any) => setNewSale({...newSale, size: e.target.value})} /></div>
+          <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Color</label><input style={styles.input} value={newSale.color} onChange={(e:any) => setNewSale({...newSale, color: e.target.value})} /></div>
         </div>
         <div style={styles.grid}>
-            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Color</label><input style={styles.input} value={newSale.color} onChange={(e:any) => setNewSale({...newSale, color: e.target.value})} /></div>
-            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Modelo</label><input style={styles.input} value={newSale.model} onChange={(e:any) => setNewSale({...newSale, model: e.target.value})} /></div>
-        </div>
-        
-        <div style={styles.inputGroup}>
-            <label style={styles.label}>Precio Venta Unit.</label>
-            <div style={styles.inputWrapper}>
-              <input type="number" style={styles.input} value={newSale.price} onChange={(e:any) => setNewSale({...newSale, price: e.target.value})} />
-              <select style={styles.selectCurrency} value={newSale.currency} onChange={(e:any) => setNewSale({...newSale, currency: e.target.value})}><option value="PEN">S/</option><option value="USD">$</option></select>
+            <div style={{...styles.inputGroup, flex: 2}}><label style={styles.label}>Boleta Nº</label><input style={styles.input} value={newSale.ticketNo} onChange={(e:any) => setNewSale({...newSale, ticketNo: e.target.value})} /></div>
+            <div style={{...styles.inputGroup, flex: 2}}>
+                <label style={styles.label}>Precio</label>
+                <div style={styles.inputWrapper}>
+                    <input type="number" style={styles.input} value={newSale.price} onChange={(e:any) => setNewSale({...newSale, price: e.target.value})} />
+                    <select style={styles.selectCurrency} value={newSale.currency} onChange={(e:any) => setNewSale({...newSale, currency: e.target.value})}><option value="PEN">S/</option><option value="USD">$</option></select>
+                </div>
             </div>
         </div>
-        <div style={styles.inputGroup}><label style={styles.label}>Descripción Adicional</label><input style={styles.input} value={newSale.description} onChange={(e:any) => setNewSale({...newSale, description: e.target.value})} /></div>
-        <div style={styles.inputGroup}><label style={styles.label}>Notas</label><textarea style={styles.textarea} value={newSale.notes} onChange={(e:any) => setNewSale({...newSale, notes: e.target.value})} /></div>
+
+        {/* CLIENTE */}
+        <div style={styles.sectionTitle}>2. Cliente</div>
+        <div style={styles.inputGroup}><label style={styles.label}>Nombre Completo</label><input style={styles.input} value={newSale.customerName} onChange={(e:any) => setNewSale({...newSale, customerName: e.target.value})} /></div>
+        <div style={styles.grid}>
+            <div style={{...styles.inputGroup, flex: 1}}>
+                <label style={styles.label}>Doc.</label>
+                <select style={styles.select} value={newSale.docType} onChange={(e:any) => setNewSale({...newSale, docType: e.target.value})}>
+                    <option>DNI</option><option>CE</option><option>Pasaporte</option><option>Otro</option>
+                </select>
+            </div>
+            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Número</label><input style={styles.input} value={newSale.docNum} onChange={(e:any) => setNewSale({...newSale, docNum: e.target.value})} /></div>
+            <div style={{...styles.inputGroup, flex: 1}}>
+                <label style={styles.label}>Sexo</label>
+                <select style={styles.select} value={newSale.sex} onChange={(e:any) => setNewSale({...newSale, sex: e.target.value})}>
+                    <option value="M">M</option><option value="F">F</option>
+                </select>
+            </div>
+        </div>
+        <div style={styles.inputGroup}><label style={styles.label}>Teléfono</label><input style={styles.input} value={newSale.phone} onChange={(e:any) => setNewSale({...newSale, phone: e.target.value})} /></div>
+
+        {/* ENVIO */}
+        <div style={styles.sectionTitle}>3. Envío y Orden</div>
+        <div style={styles.inputGroup}><label style={styles.label}>Link Orden de Compra/Lote</label><input style={styles.input} value={newSale.batchId} onChange={(e:any) => setNewSale({...newSale, batchId: e.target.value})} placeholder="Ej: Lote #54" /></div>
+        
+        <div style={styles.inputGroup}>
+            <label style={styles.label}>¿Quién Recibe?</label>
+            <select style={styles.select} value={newSale.receiverType} onChange={(e:any) => setNewSale({...newSale, receiverType: e.target.value})}>
+                <option>Mismo Comprador</option><option>Otra Persona</option>
+            </select>
+        </div>
+
+        {newSale.receiverType === 'Otra Persona' && (
+            <div style={{background: '#334155', padding: 10, borderRadius: 5, marginBottom: 15}}>
+                <div style={styles.inputGroup}><label style={styles.label}>Nombre Receptor</label><input style={styles.input} value={newSale.receiverName} onChange={(e:any) => setNewSale({...newSale, receiverName: e.target.value})} /></div>
+                <div style={styles.grid}>
+                    <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>DNI Rec.</label><input style={styles.input} value={newSale.receiverDoc} onChange={(e:any) => setNewSale({...newSale, receiverDoc: e.target.value})} /></div>
+                    <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Tel Rec.</label><input style={styles.input} value={newSale.receiverPhone} onChange={(e:any) => setNewSale({...newSale, receiverPhone: e.target.value})} /></div>
+                </div>
+            </div>
+        )}
+
+        <div style={styles.grid}>
+            <div style={{...styles.inputGroup, flex: 1}}>
+                <label style={styles.label}>Destino</label>
+                <select style={styles.select} value={newSale.destination} onChange={(e:any) => setNewSale({...newSale, destination: e.target.value})}>
+                    <option>Lima Metropolitana</option><option>Provincias</option>
+                </select>
+            </div>
+            <div style={{...styles.inputGroup, flex: 1}}>
+                <label style={styles.label}>Costo Envío (S/)</label>
+                <input type="number" style={styles.input} value={newSale.shippingCost} onChange={(e:any) => setNewSale({...newSale, shippingCost: e.target.value})} placeholder="0.00" />
+            </div>
+        </div>
         
         <button style={loading ? styles.btnLoading : styles.btnPrimary} onClick={addSale} disabled={loading}>{loading ? 'Registrando...' : 'Confirmar Venta'}</button>
       </div>
-      <div style={{...styles.card, flex: 2, overflowX: 'auto'}}>
-        <h3>Historial (Últimas)</h3>
-        <table style={styles.table}><thead><tr><th>Fecha</th><th>Boleta</th><th>Prod</th><th>Talla</th><th>Total</th></tr></thead><tbody>{sales.slice(-5).reverse().map(s => (<tr key={s.id}><td style={styles.td}>{s.date}</td><td style={styles.td}>{s.ticketNo || '-'}</td><td style={styles.td}>{s.productName}</td><td style={styles.td}>{s.size}</td><td style={styles.td}>{s.currency === 'USD' ? '$' : 'S/'} {parseFloat(s.total).toFixed(2)}</td></tr>))}</tbody></table>
+      
+      <div style={{...styles.card, flex: 1.8, overflowX: 'auto'}}>
+        <h3>Historial de Ventas</h3>
+        <input style={styles.searchBar} placeholder="🔍 Buscar por Fecha, SKU, Boleta o Destino..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+        <table style={styles.table}><thead><tr><th>Fecha</th><th>Boleta</th><th>Prod</th><th>Cliente</th><th>Destino</th><th>Total</th></tr></thead>
+        <tbody>{filteredSales.map(s => (
+            <tr key={s.id}>
+                <td style={styles.td}>{s.date}</td>
+                <td style={styles.td}>{s.ticketNo || '-'}</td>
+                <td style={styles.td}>{s.productName}</td>
+                <td style={styles.td}>{s.customerName}</td>
+                <td style={styles.td}>{s.destination}</td>
+                <td style={styles.td}>{s.currency === 'USD' ? '$' : 'S/'} {parseFloat(s.total).toFixed(2)}</td>
+            </tr>
+        ))}</tbody></table>
       </div>
     </div>
   );
@@ -260,7 +401,12 @@ export default function App() {
         <h3>Nuevo Gasto</h3>
         <div style={styles.inputGroup}><label style={styles.label}>Fecha</label><input type="date" style={styles.input} value={newExpense.date} onChange={(e:any) => setNewExpense({...newExpense, date: e.target.value})} /></div>
         
-        <div style={styles.inputGroup}><label style={styles.label}>Tipo</label><select style={styles.input} value={newExpense.type} onChange={(e:any) => setNewExpense({...newExpense, type: e.target.value})}><option>Alimentación</option><option>Vuelo</option><option>Hotel</option><option>Aduanas</option><option>Movilidad</option><option>Otros</option></select></div>
+        <div style={styles.inputGroup}><label style={styles.label}>Tipo</label>
+            <select style={styles.select} value={newExpense.type} onChange={(e:any) => setNewExpense({...newExpense, type: e.target.value})}>
+                <option>Seguro</option><option>Publicidad</option><option>Pag. Web</option><option>Comisión</option><option>Aplicaciones</option>
+                <option>Alimentación</option><option>Vuelo</option><option>Hotel</option><option>Aduanas</option><option>Movilidad</option><option>Otros</option><option>Envío</option>
+            </select>
+        </div>
         <div style={styles.inputGroup}><label style={styles.label}>Concepto</label><input style={styles.input} value={newExpense.desc} onChange={(e:any) => setNewExpense({...newExpense, desc: e.target.value})} /></div>
         <div style={{...styles.inputGroup}}>
           <label style={styles.label}>Monto</label>
@@ -269,7 +415,6 @@ export default function App() {
             <select style={styles.selectCurrency} value={newExpense.currency} onChange={(e:any) => setNewExpense({...newExpense, currency: e.target.value})}><option value="PEN">S/</option><option value="USD">$</option></select>
           </div>
         </div>
-        <div style={styles.inputGroup}><label style={styles.label}>Notas</label><textarea style={styles.textarea} value={newExpense.notes} onChange={(e:any) => setNewExpense({...newExpense, notes: e.target.value})} /></div>
         <button style={loading ? styles.btnLoading : styles.btnPrimary} onClick={addExpense} disabled={loading}>{loading ? 'Guardando...' : 'Guardar Gasto'}</button>
       </div>
       <div style={{...styles.card, flex: 2, overflowX: 'auto'}}>
@@ -279,40 +424,11 @@ export default function App() {
     </div>
   );
 
-  const renderVoid = () => (
-    <div style={{...styles.card}}>
-      <h3 style={{color:'#f87171'}}>⚠️ Zona de Anulación de Ventas</h3>
-      <div style={{overflowX:'auto'}}>
-      <table style={styles.table}>
-        <thead><tr><th>Fecha</th><th>Boleta</th><th>Producto</th><th>Total</th><th>Motivo/Notas</th><th>Acción</th></tr></thead>
-        <tbody>
-          {sales.slice().reverse().map(s => (
-            <tr key={s.id}>
-              <td style={styles.td}>{s.date}</td>
-              <td style={styles.td}>{s.ticketNo || 'S/N'}</td>
-              <td style={styles.td}>{s.productName}</td>
-              <td style={styles.td}>{s.currency === 'USD' ? '$' : 'S/'} {parseFloat(s.total).toFixed(2)}</td>
-              <td style={styles.td}>{s.notes}</td>
-              <td style={styles.td}>
-                <button style={styles.btnDelete} onClick={() => voidSale(s.id, s.sku, s.qty)}>ANULAR 🗑️</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      </div>
-    </div>
-  );
-
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <div style={styles.logoContainer}>
-          {!logoError ? (
-            <img src={LOGO_URL} alt="Veridi Store" style={styles.logoImg} onError={() => setLogoError(true)} />
-          ) : (
-            <div style={{...styles.logoText, display: 'block'}}>VERIDI STORE</div>
-          )}
+          {!logoError ? ( <img src={LOGO_URL} alt="Veridi Store" style={styles.logoImg} onError={() => setLogoError(true)} /> ) : ( <div style={{...styles.logoText, display: 'block'}}>VERIDI STORE</div> )}
         </div>
         <div style={styles.headerControls}>
           <div style={styles.exchangeRateBox}>
@@ -324,15 +440,20 @@ export default function App() {
             <button style={styles.navBtn(view === 'inventory')} onClick={() => setView('inventory')}>Inventario</button>
             <button style={styles.navBtn(view === 'sales')} onClick={() => setView('sales')}>Ventas</button>
             <button style={styles.navBtn(view === 'expenses')} onClick={() => setView('expenses')}>Gastos</button>
-            <button style={{...styles.navBtn(view === 'void'), color:'#f87171', borderColor:'#f87171'}} onClick={() => setView('void')}>Anulaciones</button>
           </nav>
         </div>
       </div>
-      {view === 'dashboard' && renderDashboard()}
+      {view === 'dashboard' && ( // DASHBOARD (Simplificado para el ejemplo)
+        <div style={styles.grid}>
+          <div style={styles.statCard}><div style={styles.label}>Ventas Totales</div><div style={{fontSize: '1.8rem', fontWeight: 'bold'}}>S/ {totalSalesPEN.toFixed(2)}</div></div>
+          <div style={styles.statCard}><div style={styles.label}>Utilidad Bruta</div><div style={{fontSize: '1.8rem', fontWeight: 'bold', color: '#4ade80'}}>S/ {grossProfit.toFixed(2)}</div></div>
+          <div style={styles.statCard}><div style={styles.label}>Gastos Totales</div><div style={{fontSize: '1.8rem', fontWeight: 'bold', color: '#f87171'}}>S/ {totalExpensesPEN.toFixed(2)}</div></div>
+          <div style={styles.statCard}><div style={styles.label}>Utilidad Neta</div><div style={{fontSize: '1.8rem', fontWeight: 'bold', color: netProfit >= 0 ? '#4ade80' : '#f87171'}}>S/ {netProfit.toFixed(2)}</div></div>
+        </div>
+      )}
       {view === 'inventory' && renderInventory()}
       {view === 'sales' && renderSales()}
       {view === 'expenses' && renderExpenses()}
-      {view === 'void' && renderVoid()}
     </div>
   );
 }
