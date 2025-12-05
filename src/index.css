@@ -1,13 +1,15 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-import './style.css'; // Si tienes un archivo css, sino borra esta línea
-
-const rootElement = document.getElementById('root');
-const root = ReactDOM.createRoot(rootElement!);
-
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Veridi Store ERP</title>
+  </head>
+  <body>
+    <!-- Este DIV es crucial, React se dibujará aquí -->
+    <div id="root"></div>
+    <!-- Esta línea conecta con el código de React -->
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

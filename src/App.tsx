@@ -31,8 +31,8 @@ const peruLocations: any = {
 const getToday = () => new Date().toISOString().split('T')[0];
 const formatDisplayDate = (isoDate: string) => {
   if (!isoDate) return '';
-  const [y, m, d] = isoDate.split('-');
-  return `${d}/${m}/${y}`;
+  const [y, m, d] = String(isoDate).split('-');
+  return d ? `${d}/${m}/${y}` : isoDate;
 };
 
 // --- ESTILOS ---
@@ -111,7 +111,11 @@ export default function App() {
   });
 
   const fileInputRef = useRef<any>(null);
-  const foundProduct = products.find(p => p.sku === newSale.sku);
+  
+  // Safe comparison helper
+  const safeString = (val: any) => String(val || '').toLowerCase();
+  
+  const foundProduct = products.find(p => safeString(p.sku) === safeString(newSale.sku));
 
   useEffect(() => {
     fetch(API_URL).then(res => res.json()).then(data => {
@@ -175,7 +179,7 @@ export default function App() {
   };
 
   const addSale = async () => {
-    const product = products.find(p => p.sku === newSale.sku);
+    const product = products.find(p => safeString(p.sku) === safeString(newSale.sku));
     if (!product) return alert('SKU no encontrado');
     if (product.stock < 1) return alert('Stock insuficiente');
 
@@ -194,7 +198,7 @@ export default function App() {
     const prevSales = [...sales]; const prevProducts = [...products]; const prevExpenses = [...expenses];
 
     setSales([...sales, saleData]);
-    setProducts(products.map(p => p.sku === newSale.sku ? { ...p, stock: p.stock - qty } : p));
+    setProducts(products.map(p => safeString(p.sku) === safeString(newSale.sku) ? { ...p, stock: p.stock - qty } : p));
     
     if(saleData.shippingCost && parseFloat(saleData.shippingCost) > 0) {
        setExpenses([...expenses, {
@@ -230,7 +234,7 @@ export default function App() {
     setLoading(true);
     const prevSales = [...sales]; const prevProducts = [...products];
     setSales(sales.filter(s => s.id !== saleId));
-    setProducts(products.map(p => p.sku === sku ? { ...p, stock: p.stock + parseInt(qty) } : p));
+    setProducts(products.map(p => safeString(p.sku) === safeString(sku) ? { ...p, stock: p.stock + parseInt(qty) } : p));
     const success = await sendToSheet({ action: 'DELETE_SALE', id: saleId, sku, qty });
     if (!success) { setSales(prevSales); setProducts(prevProducts); alert("Error al anular venta"); } 
     else { setLoading(false); alert("Venta anulada correctamente"); }
@@ -267,15 +271,15 @@ export default function App() {
   const getProvinces = () => newSale.department && peruLocations[newSale.department] ? Object.keys(peruLocations[newSale.department]) : [];
   const getDistricts = () => newSale.department && newSale.province && peruLocations[newSale.department][newSale.province] ? peruLocations[newSale.department][newSale.province] : [];
 
-  // --- FILTROS ---
+  // --- FILTROS (ROBUSTECIDOS) ---
   const getFilteredResults = () => {
     const term = globalSearch.toLowerCase();
     if (searchTab === 'inventory') {
-      return products.filter(p => formatDisplayDate(p.date).includes(term) || p.sku.toLowerCase().includes(term) || p.name.toLowerCase().includes(term) || (p.store || '').toLowerCase().includes(term));
+      return products.filter(p => formatDisplayDate(p.date).includes(term) || safeString(p.sku).includes(term) || safeString(p.name).includes(term) || safeString(p.store).includes(term));
     } else if (searchTab === 'sales') {
-      return sales.filter(s => formatDisplayDate(s.date).includes(term) || s.sku.toLowerCase().includes(term) || (s.ticketNo || '').toLowerCase().includes(term) || (s.customerName || '').toLowerCase().includes(term) || (s.docNum || '').toLowerCase().includes(term) || (s.destination || '').toLowerCase().includes(term) || (s.address || '').toLowerCase().includes(term)).slice().reverse();
+      return sales.filter(s => formatDisplayDate(s.date).includes(term) || safeString(s.sku).includes(term) || safeString(s.ticketNo).includes(term) || safeString(s.customerName).includes(term) || safeString(s.docNum).includes(term) || safeString(s.destination).includes(term) || safeString(s.address).includes(term)).slice().reverse();
     } else if (searchTab === 'expenses') {
-      return expenses.filter(e => formatDisplayDate(e.date).includes(term) || e.type.toLowerCase().includes(term) || e.desc.toLowerCase().includes(term)).slice().reverse();
+      return expenses.filter(e => formatDisplayDate(e.date).includes(term) || safeString(e.type).includes(term) || safeString(e.desc).includes(term)).slice().reverse();
     }
     return [];
   };
@@ -284,23 +288,23 @@ export default function App() {
     const term = voidSearchTerm.toLowerCase();
     if (!term) return true; 
     const visualDate = formatDisplayDate(s.date);
-    return (visualDate.includes(term) || s.sku.toLowerCase().includes(term) || (s.ticketNo || '').toLowerCase().includes(term) || (s.docNum || '').toLowerCase().includes(term));
+    return (visualDate.includes(term) || safeString(s.sku).includes(term) || safeString(s.ticketNo).includes(term) || safeString(s.docNum).includes(term));
   }).slice().reverse();
 
-  // Filtros Admin
+  // Filtros Admin (ROBUSTECIDOS)
   const adminFilteredProducts = products.filter(p => {
     const term = adminProductSearch.toLowerCase();
-    return p.sku.toLowerCase().includes(term) || p.name.toLowerCase().includes(term);
+    return safeString(p.sku).includes(term) || safeString(p.name).includes(term);
   }).slice().reverse();
 
   const adminFilteredExpenses = expenses.filter(e => {
     const term = adminExpenseSearch.toLowerCase();
-    return e.desc.toLowerCase().includes(term) || e.type.toLowerCase().includes(term) || String(e.amount).includes(term);
+    return safeString(e.desc).includes(term) || safeString(e.type).includes(term) || String(e.amount).includes(term);
   }).slice().reverse();
 
   const handleSkuChange = (e: any) => {
     const val = e.target.value;
-    const found = products.find(p => p.sku === val);
+    const found = products.find(p => safeString(p.sku) === safeString(val));
     setNewSale((prev: any) => ({ ...prev, sku: val, size: found ? found.size : prev.size, color: found ? found.color : prev.color, model: found ? found.model : prev.model })); 
   };
 
@@ -310,7 +314,7 @@ export default function App() {
   };
   
   const totalSalesPEN = sales.reduce((acc, s) => acc + toPEN(s.total, s.currency, s.exchangeRate), 0);
-  const totalCOGSPEN = sales.reduce((acc, s) => { const p = products.find(prod => prod.sku === s.sku); return acc + (p ? toPEN(p.cost, p.currency, p.exchangeRate) * s.qty : 0); }, 0);
+  const totalCOGSPEN = sales.reduce((acc, s) => { const p = products.find(prod => safeString(prod.sku) === safeString(s.sku)); return acc + (p ? toPEN(p.cost, p.currency, p.exchangeRate) * s.qty : 0); }, 0);
   const totalExpensesPEN = expenses.reduce((acc, e) => acc + toPEN(e.amount, e.currency, e.exchangeRate), 0);
   const grossProfit = totalSalesPEN - totalCOGSPEN;
   const netProfit = grossProfit - totalExpensesPEN;
