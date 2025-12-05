@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// --- TU URL (RECUERDA QUE AL HACER NUEVA IMPLEMENTACIÓN PUEDE CAMBIAR SI GOOGLE QUIERE, PERO MANTENDRÉ LA ÚLTIMA QUE DISTE) ---
-// SI LA URL CAMBIA AL IMPLEMENTAR, ACTUALÍZALA AQUÍ
-const API_URL = "https://script.google.com/macros/s/AKfycbwF9boFrvkr4GBLQYk2A86IvHy9zPc598mMCf4Rd2EaKpLSbJAXRJN8dfxoC6gNNv04lw/exec";
+// --- TU NUEVA URL ACTUALIZADA ---
+const API_URL = "https://script.google.com/macros/s/AKfycbzkQEqZTYtjY0wPVSOuIb_t4qFkamNugaDjK9VcQsVns66quu-Y_bwkxI-KCdF8gNYKOA/exec";
 
 // --- LOGO ---
 const LOGO_URL = "https://lh3.googleusercontent.com/d/1obDjT8NmSP-Z9L37P7fR5nPVBEdzL-r1";
