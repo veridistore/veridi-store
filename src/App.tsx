@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// --- TU URL ACTUALIZADA ---
-const API_URL = "https://script.google.com/macros/s/AKfycbwdEkqFStb5p56VEsNj40w-cVYVrXbUfuwvrUWyYTkwWACZG8yuvELQ3A9nZoTdltkhbw/exec";
+// --- TU URL ACTUALIZADA (CORRECTA) ---
+const API_URL = "https://script.google.com/macros/s/AKfycbxzLdV0qDNzgjgBDl0c_rVy3TyHHSH19a7NGhP56DoB4Fnj0rhDXre4ARC0nVmjNbAeNw/exec";
 
 // --- LOGO ---
 const LOGO_URL = "https://lh3.googleusercontent.com/d/1obDjT8NmSP-Z9L37P7fR5nPVBEdzL-r1";
@@ -53,13 +53,13 @@ export default function App() {
   const [exchangeRate, setExchangeRate] = useState<any>(3.75); 
   const [logoError, setLogoError] = useState(false);
 
-  // Datos
   const [products, setProducts] = useState<any[]>([]);
   const [sales, setSales] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   
-  // Filtros de búsqueda para ventas
+  // Filtros
   const [searchTerm, setSearchTerm] = useState('');
+  const [voidSearchTerm, setVoidSearchTerm] = useState('');
 
   // Estados Formularios
   const [newProduct, setNewProduct] = useState<any>({ 
@@ -70,7 +70,7 @@ export default function App() {
   const [newSale, setNewSale] = useState<any>({ 
     date: getToday(), sku: '', price: '', currency: 'PEN', ticketNo: '', description: '', notes: '', 
     size: '', color: '', model: '',
-    customerName: '', docType: 'DNI', docNum: '', sex: 'M', phone: '',
+    customerName: '', docType: 'DNI', docNum: '', sex: 'M', phone: '', email: '', 
     batchId: '', receiverType: 'Mismo Comprador', receiverName: '', receiverDoc: '', receiverPhone: '',
     destination: 'Lima Metropolitana', shippingCost: ''
   }); 
@@ -95,7 +95,6 @@ export default function App() {
     } catch (error) { console.error(error); setLoading(false); alert("Error de conexión"); return false; }
   };
 
-  // Convertir imagen a Base64 y redimensionar (para no saturar Google Apps Script)
   const handleImageUpload = (e: any) => {
     const file = e.target.files[0];
     if (file) {
@@ -105,12 +104,12 @@ export default function App() {
         img.onload = () => {
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
-          const maxWidth = 600; // Redimensionar a max 600px
+          const maxWidth = 600; 
           const scaleSize = maxWidth / img.width;
           canvas.width = maxWidth;
           canvas.height = img.height * scaleSize;
           ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7); // Compresión JPEG 70%
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7); 
           setNewProduct({ ...newProduct, imageBase64: compressedBase64 });
         };
         img.src = event.target.result;
@@ -125,7 +124,6 @@ export default function App() {
     const action = isEdit ? 'UPDATE_PRODUCT' : 'ADD_PRODUCT';
     const productData = { ...newProduct, id: newProduct.id || Date.now(), cost: parseFloat(newProduct.cost), stock: parseInt(newProduct.stock), exchangeRate };
     
-    // Actualización optimista
     let updatedProducts;
     if (isEdit) {
       updatedProducts = products.map(p => p.id === productData.id ? productData : p);
@@ -134,17 +132,15 @@ export default function App() {
     }
     setProducts(updatedProducts);
     
-    // Limpiar form
     setNewProduct({ id: null, date: getToday(), name: '', sku: '', category: '', cost: '', stock: '', currency: 'PEN', description: '', notes: '', size: '', color: '', model: '', image: '', imageBase64: '' });
     if(fileInputRef.current) fileInputRef.current.value = "";
 
     const success = await sendToSheet({ action, ...productData });
-    if (!success && !isEdit) setProducts(products); // Revertir solo si era nuevo
+    if (!success && !isEdit) setProducts(products); 
   };
 
   const editProduct = (prod: any) => {
     setNewProduct(prod);
-    // Scroll arriba
     window.scrollTo(0,0);
   };
 
@@ -171,7 +167,6 @@ export default function App() {
     setSales([...sales, saleData]);
     setProducts(products.map(p => p.sku === newSale.sku ? { ...p, stock: p.stock - qty } : p));
     
-    // Si hay envio, agregar gasto visualmente también
     if(saleData.shippingCost && parseFloat(saleData.shippingCost) > 0) {
        setExpenses([...expenses, {
          id: Date.now(), date: saleData.date, type: 'Envío', desc: `Envío Boleta ${saleData.ticketNo}`, 
@@ -179,7 +174,7 @@ export default function App() {
        }]);
     }
 
-    setNewSale({ date: getToday(), sku: '', price: '', currency: 'PEN', ticketNo: '', description: '', notes: '', size: '', color: '', model: '', customerName: '', docType: 'DNI', docNum: '', sex: 'M', phone: '', batchId: '', receiverType: 'Mismo Comprador', receiverName: '', receiverDoc: '', receiverPhone: '', destination: 'Lima Metropolitana', shippingCost: '' });
+    setNewSale({ date: getToday(), sku: '', price: '', currency: 'PEN', ticketNo: '', description: '', notes: '', size: '', color: '', model: '', customerName: '', docType: 'DNI', docNum: '', sex: 'M', phone: '', email: '', batchId: '', receiverType: 'Mismo Comprador', receiverName: '', receiverDoc: '', receiverPhone: '', destination: 'Lima Metropolitana', shippingCost: '' });
 
     const success = await sendToSheet({ action: 'ADD_SALE', ...saleData });
     if (!success) { setSales(prevSales); setProducts(prevProducts); setExpenses(prevExpenses); alert("Error guardando venta"); }
@@ -197,7 +192,28 @@ export default function App() {
     if (!success) setExpenses(prevExpenses);
   };
 
-  // Filtrado de Ventas
+  const voidSale = async (saleId: any, sku: string, qty: any) => {
+    if (!confirm("¿Seguro que deseas anular esta venta? El stock será devuelto.")) return;
+    setLoading(true);
+    
+    const prevSales = [...sales];
+    const prevProducts = [...products];
+
+    setSales(sales.filter(s => s.id !== saleId));
+    setProducts(products.map(p => p.sku === sku ? { ...p, stock: p.stock + parseInt(qty) } : p));
+
+    const success = await sendToSheet({ action: 'DELETE_SALE', id: saleId, sku, qty });
+    if (!success) {
+      setSales(prevSales);
+      setProducts(prevProducts);
+      alert("Error al anular venta");
+    } else {
+      setLoading(false);
+      alert("Venta anulada correctamente");
+    }
+  };
+
+  // Filtros
   const filteredSales = sales.filter(s => {
     const term = searchTerm.toLowerCase();
     return (
@@ -205,6 +221,18 @@ export default function App() {
       s.sku.toLowerCase().includes(term) ||
       (s.ticketNo || '').toLowerCase().includes(term) ||
       (s.destination || '').toLowerCase().includes(term)
+    );
+  }).slice().reverse();
+
+  // Filtro específico para Anulaciones
+  const voidFilteredSales = sales.filter(s => {
+    const term = voidSearchTerm.toLowerCase();
+    if (!term) return true; 
+    return (
+      s.date.includes(term) ||
+      s.sku.toLowerCase().includes(term) ||
+      (s.ticketNo || '').toLowerCase().includes(term) ||
+      (s.docNum || '').toLowerCase().includes(term)
     );
   }).slice().reverse();
 
@@ -225,7 +253,6 @@ export default function App() {
     return currency === 'USD' ? val * rate : val;
   };
   
-  // Totales
   const totalSalesPEN = sales.reduce((acc, s) => acc + toPEN(s.total, s.currency, s.exchangeRate), 0);
   const totalCOGSPEN = sales.reduce((acc, s) => {
     const p = products.find(prod => prod.sku === s.sku);
@@ -238,25 +265,20 @@ export default function App() {
 
   if (initialLoad) return <div style={styles.container}><h2 style={{textAlign:'center', marginTop:'20%'}}>Cargando Veridi System...</h2></div>;
 
-  // --- VISTAS ---
-  
   const renderInventory = () => (
     <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
       <div style={{...styles.card, flex: 1}}>
         <h3>{newProduct.id ? 'Editar Producto' : 'Agregar Producto'}</h3>
         <div style={styles.inputGroup}><label style={styles.label}>Fecha Ingreso</label><input type="date" style={styles.input} value={newProduct.date} onChange={(e:any) => setNewProduct({...newProduct, date: e.target.value})} /></div>
-        
-        {/* FOTO */}
         <div style={styles.inputGroup}>
             <label style={styles.label}>Foto del Producto</label>
             <input type="file" ref={fileInputRef} onChange={handleImageUpload} style={{color: 'white'}} accept="image/*" />
             {newProduct.imageBase64 && <div style={{marginTop: 10}}><img src={newProduct.imageBase64} style={styles.imagePreview} alt="Preview" /> (Listo para subir)</div>}
             {newProduct.image && !newProduct.imageBase64 && <div style={{marginTop: 10}}><img src={newProduct.image} style={styles.imagePreview} alt="Current" /> (Actual)</div>}
         </div>
-
         <div style={styles.inputGroup}><label style={styles.label}>SKU</label><input style={styles.input} value={newProduct.sku} onChange={(e:any) => setNewProduct({...newProduct, sku: e.target.value})} placeholder="Ej: NK-001" disabled={!!newProduct.id} /></div>
         <div style={styles.grid}>
-            <div style={{...styles.inputGroup, flex: 2}}><label style={styles.label}>Nombre del Producto</label><input style={styles.input} value={newProduct.name} onChange={(e:any) => setNewProduct({...newProduct, name: e.target.value})} /></div>
+            <div style={{...styles.inputGroup, flex: 2}}><label style={styles.label}>Nombre</label><input style={styles.input} value={newProduct.name} onChange={(e:any) => setNewProduct({...newProduct, name: e.target.value})} /></div>
             <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Talla</label><input style={styles.input} value={newProduct.size} onChange={(e:any) => setNewProduct({...newProduct, size: e.target.value})} placeholder="S, M..." /></div>
         </div>
         <div style={styles.grid}>
@@ -275,13 +297,9 @@ export default function App() {
           <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Stock</label><input type="number" style={styles.input} value={newProduct.stock} onChange={(e:any) => setNewProduct({...newProduct, stock: e.target.value})} /></div>
         </div>
         <div style={styles.inputGroup}><label style={styles.label}>Notas</label><textarea style={styles.textarea} value={newProduct.notes} onChange={(e:any) => setNewProduct({...newProduct, notes: e.target.value})} /></div>
-        
-        <button style={loading ? styles.btnLoading : (newProduct.id ? styles.btnWarning : styles.btnPrimary)} onClick={addProduct} disabled={loading}>
-            {loading ? 'Procesando...' : (newProduct.id ? 'Actualizar Producto' : 'Guardar Producto')}
-        </button>
+        <button style={loading ? styles.btnLoading : (newProduct.id ? styles.btnWarning : styles.btnPrimary)} onClick={addProduct} disabled={loading}>{loading ? 'Procesando...' : (newProduct.id ? 'Actualizar Producto' : 'Guardar Producto')}</button>
         {newProduct.id && <button style={{...styles.btnDelete, marginTop: 10, width: '100%'}} onClick={() => setNewProduct({ id: null, date: getToday(), name: '', sku: '', category: '', cost: '', stock: '', currency: 'PEN', description: '', notes: '', size: '', color: '', model: '', image: '', imageBase64: '' })}>Cancelar Edición</button>}
       </div>
-      
       <div style={{...styles.card, flex: 2, overflowX: 'auto'}}>
         <h3>Inventario (Click para Editar)</h3>
         <table style={styles.table}><thead><tr><th>Foto</th><th>SKU</th><th>Prod</th><th>Talla</th><th>Color</th><th>Stock</th></tr></thead>
@@ -300,8 +318,6 @@ export default function App() {
       <div style={{...styles.card, flex: 1.2}}>
         <h3>Nueva Venta</h3>
         <div style={styles.inputGroup}><label style={styles.label}>Fecha Venta</label><input type="date" style={styles.input} value={newSale.date} onChange={(e:any) => setNewSale({...newSale, date: e.target.value})} /></div>
-        
-        {/* PRODUCTO */}
         <div style={styles.sectionTitle}>1. Producto</div>
         <div style={styles.inputGroup}><label style={styles.label}>SKU (Escanear)</label><input style={styles.input} value={newSale.sku} onChange={handleSkuChange} autoFocus placeholder="Escanea aquí..." />
         {newSale.sku && foundProduct ? <div style={styles.productInfo}>✅ {foundProduct.name} (Stock: {foundProduct.stock})</div> : null}</div>
@@ -319,8 +335,6 @@ export default function App() {
                 </div>
             </div>
         </div>
-
-        {/* CLIENTE */}
         <div style={styles.sectionTitle}>2. Cliente</div>
         <div style={styles.inputGroup}><label style={styles.label}>Nombre Completo</label><input style={styles.input} value={newSale.customerName} onChange={(e:any) => setNewSale({...newSale, customerName: e.target.value})} /></div>
         <div style={styles.grid}>
@@ -338,9 +352,11 @@ export default function App() {
                 </select>
             </div>
         </div>
-        <div style={styles.inputGroup}><label style={styles.label}>Teléfono</label><input style={styles.input} value={newSale.phone} onChange={(e:any) => setNewSale({...newSale, phone: e.target.value})} /></div>
+        <div style={styles.grid}>
+            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Teléfono</label><input style={styles.input} value={newSale.phone} onChange={(e:any) => setNewSale({...newSale, phone: e.target.value})} /></div>
+            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Email</label><input style={styles.input} type="email" value={newSale.email} onChange={(e:any) => setNewSale({...newSale, email: e.target.value})} /></div>
+        </div>
 
-        {/* ENVIO */}
         <div style={styles.sectionTitle}>3. Envío y Orden</div>
         <div style={styles.inputGroup}><label style={styles.label}>Link Orden de Compra/Lote</label><input style={styles.input} value={newSale.batchId} onChange={(e:any) => setNewSale({...newSale, batchId: e.target.value})} placeholder="Ej: Lote #54" /></div>
         
@@ -380,14 +396,14 @@ export default function App() {
       <div style={{...styles.card, flex: 1.8, overflowX: 'auto'}}>
         <h3>Historial de Ventas</h3>
         <input style={styles.searchBar} placeholder="🔍 Buscar por Fecha, SKU, Boleta o Destino..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-        <table style={styles.table}><thead><tr><th>Fecha</th><th>Boleta</th><th>Prod</th><th>Cliente</th><th>Destino</th><th>Total</th></tr></thead>
+        <table style={styles.table}><thead><tr><th>Fecha</th><th>Boleta</th><th>Prod</th><th>Cliente</th><th>Email</th><th>Total</th></tr></thead>
         <tbody>{filteredSales.map(s => (
             <tr key={s.id}>
                 <td style={styles.td}>{s.date}</td>
                 <td style={styles.td}>{s.ticketNo || '-'}</td>
                 <td style={styles.td}>{s.productName}</td>
                 <td style={styles.td}>{s.customerName}</td>
-                <td style={styles.td}>{s.destination}</td>
+                <td style={styles.td}>{s.email}</td>
                 <td style={styles.td}>{s.currency === 'USD' ? '$' : 'S/'} {parseFloat(s.total).toFixed(2)}</td>
             </tr>
         ))}</tbody></table>
@@ -400,7 +416,6 @@ export default function App() {
       <div style={{...styles.card, flex: 1}}>
         <h3>Nuevo Gasto</h3>
         <div style={styles.inputGroup}><label style={styles.label}>Fecha</label><input type="date" style={styles.input} value={newExpense.date} onChange={(e:any) => setNewExpense({...newExpense, date: e.target.value})} /></div>
-        
         <div style={styles.inputGroup}><label style={styles.label}>Tipo</label>
             <select style={styles.select} value={newExpense.type} onChange={(e:any) => setNewExpense({...newExpense, type: e.target.value})}>
                 <option>Seguro</option><option>Publicidad</option><option>Pag. Web</option><option>Comisión</option><option>Aplicaciones</option>
@@ -424,6 +439,43 @@ export default function App() {
     </div>
   );
 
+  const renderVoid = () => (
+    <div style={{...styles.card}}>
+      <h3 style={{color:'#f87171'}}>⚠️ Zona de Anulación de Ventas</h3>
+      
+      <div style={{marginBottom: 20}}>
+        <label style={styles.label}>Buscar Venta para Anular:</label>
+        <input 
+            style={styles.searchBar} 
+            placeholder="Escribe Boleta, DNI, Fecha (AAAA-MM-DD) o SKU..." 
+            value={voidSearchTerm} 
+            onChange={e => setVoidSearchTerm(e.target.value)} 
+        />
+      </div>
+
+      <div style={{overflowX:'auto'}}>
+      <table style={styles.table}>
+        <thead><tr><th>Fecha</th><th>Boleta</th><th>Cliente (DNI)</th><th>Producto</th><th>Total</th><th>Acción</th></tr></thead>
+        <tbody>
+          {voidFilteredSales.map(s => (
+            <tr key={s.id}>
+              <td style={styles.td}>{s.date}</td>
+              <td style={styles.td}>{s.ticketNo || 'S/N'}</td>
+              <td style={styles.td}>{s.customerName} {s.docNum ? `(${s.docNum})` : ''}</td>
+              <td style={styles.td}>{s.productName} ({s.sku})</td>
+              <td style={styles.td}>{s.currency === 'USD' ? '$' : 'S/'} {parseFloat(s.total).toFixed(2)}</td>
+              <td style={styles.td}>
+                <button style={styles.btnDelete} onClick={() => voidSale(s.id, s.sku, s.qty)}>ANULAR 🗑️</button>
+              </td>
+            </tr>
+          ))}
+          {voidFilteredSales.length === 0 && <tr><td colSpan={6} style={{padding: 20, textAlign: 'center', color: '#94a3b8'}}>No se encontraron ventas con esos datos.</td></tr>}
+        </tbody>
+      </table>
+      </div>
+    </div>
+  );
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -440,10 +492,11 @@ export default function App() {
             <button style={styles.navBtn(view === 'inventory')} onClick={() => setView('inventory')}>Inventario</button>
             <button style={styles.navBtn(view === 'sales')} onClick={() => setView('sales')}>Ventas</button>
             <button style={styles.navBtn(view === 'expenses')} onClick={() => setView('expenses')}>Gastos</button>
+            <button style={{...styles.navBtn(view === 'void'), color:'#f87171', borderColor:'#f87171'}} onClick={() => setView('void')}>Anulaciones</button>
           </nav>
         </div>
       </div>
-      {view === 'dashboard' && ( // DASHBOARD (Simplificado para el ejemplo)
+      {view === 'dashboard' && ( 
         <div style={styles.grid}>
           <div style={styles.statCard}><div style={styles.label}>Ventas Totales</div><div style={{fontSize: '1.8rem', fontWeight: 'bold'}}>S/ {totalSalesPEN.toFixed(2)}</div></div>
           <div style={styles.statCard}><div style={styles.label}>Utilidad Bruta</div><div style={{fontSize: '1.8rem', fontWeight: 'bold', color: '#4ade80'}}>S/ {grossProfit.toFixed(2)}</div></div>
@@ -454,6 +507,7 @@ export default function App() {
       {view === 'inventory' && renderInventory()}
       {view === 'sales' && renderSales()}
       {view === 'expenses' && renderExpenses()}
+      {view === 'void' && renderVoid()}
     </div>
   );
 }
