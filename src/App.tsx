@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// --- TU NUEVA URL ACTUALIZADA ---
+// --- TU URL DE GOOGLE APPS SCRIPT ---
+// ⚠️ Asegúrate de que esta sea la URL de la ÚLTIMA implementación ("Nueva versión")
 const API_URL = "https://script.google.com/macros/s/AKfycbzkQEqZTYtjY0wPVSOuIb_t4qFkamNugaDjK9VcQsVns66quu-Y_bwkxI-KCdF8gNYKOA/exec";
 
 // --- LOGO ---
@@ -34,6 +35,9 @@ const formatDisplayDate = (isoDate: string) => {
   const [y, m, d] = String(isoDate).split('-');
   return d ? `${d}/${m}/${y}` : isoDate;
 };
+
+// --- SAFE STRING HELPER (Evita pantalla blanca) ---
+const safeString = (val: any) => String(val || '').toLowerCase();
 
 // --- ESTILOS ---
 const styles = {
@@ -97,11 +101,12 @@ export default function App() {
     description: '', notes: '', size: '', color: '', model: '', image: '', imageBase64: '', store: '' 
   });
   
+  // --- AQUI ESTA EL CAMBIO: receiverType por defecto es 'Yo' ---
   const [newSale, setNewSale] = useState<any>({ 
     date: getToday(), sku: '', price: '', currency: 'PEN', ticketNo: '', description: '', notes: '', 
     size: '', color: '', model: '',
     customerName: '', docType: 'DNI', docNum: '', sex: 'M', phone: '', email: '', 
-    batchId: '', receiverType: 'Mismo Comprador', receiverName: '', receiverDoc: '', receiverPhone: '',
+    batchId: '', receiverType: 'Yo', receiverName: '', receiverDoc: '', receiverPhone: '',
     destination: 'Lima Metropolitana', shippingCost: '', address: '', reference: '',
     department: '', province: '', district: '' 
   }); 
@@ -112,9 +117,7 @@ export default function App() {
 
   const fileInputRef = useRef<any>(null);
   
-  // Safe comparison helper
-  const safeString = (val: any) => String(val || '').toLowerCase();
-  
+  // Buscador seguro
   const foundProduct = products.find(p => safeString(p.sku) === safeString(newSale.sku));
 
   useEffect(() => {
@@ -210,7 +213,7 @@ export default function App() {
     setNewSale({ 
       date: getToday(), sku: '', price: '', currency: 'PEN', ticketNo: '', description: '', notes: '', size: '', color: '', model: '', 
       customerName: '', docType: 'DNI', docNum: '', sex: 'M', phone: '', email: '', 
-      batchId: '', receiverType: 'Mismo Comprador', receiverName: '', receiverDoc: '', receiverPhone: '', 
+      batchId: '', receiverType: 'Yo', receiverName: '', receiverDoc: '', receiverPhone: '', 
       destination: 'Lima Metropolitana', shippingCost: '', address: '', reference: '',
       department: '', province: '', district: '' 
     });
@@ -240,7 +243,6 @@ export default function App() {
     else { setLoading(false); alert("Venta anulada correctamente"); }
   };
 
-  // --- DELETE PRODUCTS & EXPENSES ---
   const deleteProduct = async (id: any) => {
     if (!confirm("⚠️ ¿Estás seguro de eliminar este producto PERMANENTEMENTE del inventario?")) return;
     setLoading(true);
@@ -261,7 +263,6 @@ export default function App() {
     else { setLoading(false); alert("Gasto eliminado"); }
   };
 
-  // --- LOGIC UBIGEO ---
   const handleDepartmentChange = (e: any) => {
     setNewSale({ ...newSale, department: e.target.value, province: '', district: '' });
   };
@@ -271,7 +272,6 @@ export default function App() {
   const getProvinces = () => newSale.department && peruLocations[newSale.department] ? Object.keys(peruLocations[newSale.department]) : [];
   const getDistricts = () => newSale.department && newSale.province && peruLocations[newSale.department][newSale.province] ? peruLocations[newSale.department][newSale.province] : [];
 
-  // --- FILTROS (ROBUSTECIDOS) ---
   const getFilteredResults = () => {
     const term = globalSearch.toLowerCase();
     if (searchTab === 'inventory') {
@@ -291,7 +291,6 @@ export default function App() {
     return (visualDate.includes(term) || safeString(s.sku).includes(term) || safeString(s.ticketNo).includes(term) || safeString(s.docNum).includes(term));
   }).slice().reverse();
 
-  // Filtros Admin (ROBUSTECIDOS)
   const adminFilteredProducts = products.filter(p => {
     const term = adminProductSearch.toLowerCase();
     return safeString(p.sku).includes(term) || safeString(p.name).includes(term);
@@ -321,7 +320,6 @@ export default function App() {
 
   if (initialLoad) return <div style={styles.container}><h2 style={{textAlign:'center', marginTop:'20%'}}>Cargando Veridi System...</h2></div>;
 
-  // RENDERERS
   const renderInventory = () => (
     <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
       <div style={{...styles.card, flex: 1}}>
@@ -379,7 +377,6 @@ export default function App() {
         <div style={styles.inputGroup}><label style={styles.label}>SKU (Escanear)</label><input style={styles.input} value={newSale.sku} onChange={handleSkuChange} autoFocus placeholder="Escanea aquí..." />
         {newSale.sku && foundProduct ? <div style={styles.productInfo}>✅ Producto encontrado</div> : null}</div>
         
-        {/* NOMBRE DEL PRODUCTO AUTOMATICO (SOLO LECTURA) */}
         <div style={styles.inputGroup}><label style={styles.label}>Nombre del Producto</label><input style={styles.inputDisabled} value={foundProduct ? foundProduct.name : ''} readOnly placeholder="Se llena automáticamente al ingresar SKU" /></div>
 
         <div style={styles.grid}>
@@ -418,8 +415,9 @@ export default function App() {
         
         <div style={styles.inputGroup}>
             <label style={styles.label}>¿Quién Recibe?</label>
+            {/* --- AQUI ESTA EL CAMBIO VISUAL --- */}
             <select style={styles.select} value={newSale.receiverType} onChange={(e:any) => setNewSale({...newSale, receiverType: e.target.value})}>
-                <option>Mismo Comprador</option><option>Otra Persona</option>
+                <option>Yo</option><option>Otra Persona</option>
             </select>
         </div>
 
@@ -461,7 +459,6 @@ export default function App() {
             </div>
             <div style={styles.inputGroup}><label style={styles.label}>Dirección Exacta</label><input style={styles.input} value={newSale.address} onChange={(e:any) => setNewSale({...newSale, address: e.target.value})} placeholder="Av. Principal 123..." /></div>
             
-            {/* NUEVA PESTAÑA REFERENCIA */}
             <div style={styles.inputGroup}><label style={styles.label}>Referencia</label><input style={styles.input} value={newSale.reference} onChange={(e:any) => setNewSale({...newSale, reference: e.target.value})} placeholder="Ej: Frente al parque, puerta azul..." /></div>
         </div>
 
