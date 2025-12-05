@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// --- TU URL DE GOOGLE APPS SCRIPT ---
-// ⚠️ Asegúrate de que esta sea la URL de la ÚLTIMA implementación ("Nueva versión")
-const API_URL = "https://script.google.com/macros/s/AKfycbzkQEqZTYtjY0wPVSOuIb_t4qFkamNugaDjK9VcQsVns66quu-Y_bwkxI-KCdF8gNYKOA/exec";
+// --- TU NUEVA URL (ACTUALIZADA 12:27 AM) ---
+const API_URL = "https://script.google.com/macros/s/AKfycbw6vYJgWbf3mCLkc3Xki0mgCE6ZsafrgDWCWKZ82Jbq5KDbJDRQr0TgZCJurHDqA3quZg/exec";
 
 // --- LOGO ---
 const LOGO_URL = "https://lh3.googleusercontent.com/d/1obDjT8NmSP-Z9L37P7fR5nPVBEdzL-r1";
@@ -36,7 +35,7 @@ const formatDisplayDate = (isoDate: string) => {
   return d ? `${d}/${m}/${y}` : isoDate;
 };
 
-// --- SAFE STRING HELPER (Evita pantalla blanca) ---
+// --- SAFE STRING HELPER (Evita pantalla blanca si SKU es número) ---
 const safeString = (val: any) => String(val || '').toLowerCase();
 
 // --- ESTILOS ---
@@ -101,7 +100,6 @@ export default function App() {
     description: '', notes: '', size: '', color: '', model: '', image: '', imageBase64: '', store: '' 
   });
   
-  // --- AQUI ESTA EL CAMBIO: receiverType por defecto es 'Yo' ---
   const [newSale, setNewSale] = useState<any>({ 
     date: getToday(), sku: '', price: '', currency: 'PEN', ticketNo: '', description: '', notes: '', 
     size: '', color: '', model: '',
@@ -415,7 +413,6 @@ export default function App() {
         
         <div style={styles.inputGroup}>
             <label style={styles.label}>¿Quién Recibe?</label>
-            {/* --- AQUI ESTA EL CAMBIO VISUAL --- */}
             <select style={styles.select} value={newSale.receiverType} onChange={(e:any) => setNewSale({...newSale, receiverType: e.target.value})}>
                 <option>Yo</option><option>Otra Persona</option>
             </select>
