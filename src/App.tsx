@@ -1,13 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// --- TU URL ACTUALIZADA (CORRECTA) ---
-const API_URL = "https://script.google.com/macros/s/AKfycbxzLdV0qDNzgjgBDl0c_rVy3TyHHSH19a7NGhP56DoB4Fnj0rhDXre4ARC0nVmjNbAeNw/exec";
+// --- TU NUEVA URL (ACTUALIZADA) ---
+const API_URL = "https://script.google.com/macros/s/AKfycbxL_SNillbnE9-kYqvRsRDg4icmKyPnbXkzjsGP1iF8neVNruDWJCeYA6JNGAtVF8RTXw/exec";
 
 // --- LOGO ---
 const LOGO_URL = "https://lh3.googleusercontent.com/d/1obDjT8NmSP-Z9L37P7fR5nPVBEdzL-r1";
 
+// --- DATA PERÚ (Base de datos de Ubigeo resumida) ---
+const peruLocations: any = {
+  "Lima": {
+    "Lima": ["Cercado de Lima","Ate","Barranco","Breña","Carabayllo","Chorrillos","Comas","El Agustino","Independencia","Jesus Maria","La Molina","La Victoria","Lince","Los Olivos","Lurigancho","Lurin","Magdalena del Mar","Miraflores","Pachacamac","Pucusana","Pueblo Libre","Puente Piedra","Punta Hermosa","Punta Negra","Rimac","San Bartolo","San Borja","San Isidro","San Juan de Lurigancho","San Juan de Miraflores","San Luis","San Martin de Porres","San Miguel","Santa Anita","Santa Maria del Mar","Santa Rosa","Santiago de Surco","Surquillo","Villa El Salvador","Villa Maria del Triunfo"],
+    "Cañete": ["San Vicente","Asia","Chilca","Mala","Lunahuana"],
+    "Huaral": ["Huaral","Chancay"],
+    "Huaura": ["Huacho","Vegueta"]
+  },
+  "Callao": { "Callao": ["Bellavista","Callao","Carmen de la Legua","La Perla","La Punta","Ventanilla","Mi Peru"] },
+  "Arequipa": { "Arequipa": ["Arequipa","Cayma","Cerro Colorado","Yanahuara","Miraflores"], "Camana": ["Camana"], "Islay": ["Mollendo"] },
+  "Cusco": { "Cusco": ["Cusco","San Jeronimo","San Sebastian","Wanchaq"], "Urubamba": ["Urubamba","Machupicchu"] },
+  "La Libertad": { "Trujillo": ["Trujillo","Huanchaco","Victor Larco Herrera"], "Pacasmayo": ["Pacasmayo"] },
+  "Lambayeque": { "Chiclayo": ["Chiclayo","La Victoria","Pimentel"], "Lambayeque": ["Lambayeque"] },
+  "Piura": { "Piura": ["Piura","Castilla"], "Sullana": ["Sullana"], "Talara": ["Talara","Mancora"] },
+  "Junin": { "Huancayo": ["Huancayo","El Tambo"], "Tarma": ["Tarma"] },
+  "Ica": { "Ica": ["Ica","Parcona"], "Pisco": ["Pisco","Paracas"], "Chincha": ["Chincha Alta"] },
+  "Ancash": { "Huaraz": ["Huaraz", "Independencia"], "Santa": ["Chimbote", "Nuevo Chimbote"] },
+  "Loreto": { "Maynas": ["Iquitos", "Punchana", "Belen"] },
+  "Tacna": { "Tacna": ["Tacna", "Gregorio Albarracin"] }
+};
+
 // --- HELPERS ---
 const getToday = () => new Date().toISOString().split('T')[0];
+const formatDisplayDate = (isoDate: string) => {
+  if (!isoDate) return '';
+  const [y, m, d] = isoDate.split('-');
+  return `${d}/${m}/${y}`;
+};
 
 // --- ESTILOS ---
 const styles = {
@@ -58,13 +84,14 @@ export default function App() {
   const [expenses, setExpenses] = useState<any[]>([]);
   
   // Filtros
-  const [searchTerm, setSearchTerm] = useState('');
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [searchTab, setSearchTab] = useState('inventory');
   const [voidSearchTerm, setVoidSearchTerm] = useState('');
 
   // Estados Formularios
   const [newProduct, setNewProduct] = useState<any>({ 
     id: null, date: getToday(), name: '', sku: '', category: '', cost: '', stock: '', currency: 'PEN', 
-    description: '', notes: '', size: '', color: '', model: '', image: '', imageBase64: '' 
+    description: '', notes: '', size: '', color: '', model: '', image: '', imageBase64: '', store: '' 
   });
   
   const [newSale, setNewSale] = useState<any>({ 
@@ -72,7 +99,8 @@ export default function App() {
     size: '', color: '', model: '',
     customerName: '', docType: 'DNI', docNum: '', sex: 'M', phone: '', email: '', 
     batchId: '', receiverType: 'Mismo Comprador', receiverName: '', receiverDoc: '', receiverPhone: '',
-    destination: 'Lima Metropolitana', shippingCost: ''
+    destination: 'Lima Metropolitana', shippingCost: '', address: '',
+    department: '', province: '', district: '' 
   }); 
   
   const [newExpense, setNewExpense] = useState<any>({ 
@@ -131,10 +159,8 @@ export default function App() {
       updatedProducts = [...products, productData];
     }
     setProducts(updatedProducts);
-    
-    setNewProduct({ id: null, date: getToday(), name: '', sku: '', category: '', cost: '', stock: '', currency: 'PEN', description: '', notes: '', size: '', color: '', model: '', image: '', imageBase64: '' });
+    setNewProduct({ id: null, date: getToday(), name: '', sku: '', category: '', cost: '', stock: '', currency: 'PEN', description: '', notes: '', size: '', color: '', model: '', image: '', imageBase64: '', store: '' });
     if(fileInputRef.current) fileInputRef.current.value = "";
-
     const success = await sendToSheet({ action, ...productData });
     if (!success && !isEdit) setProducts(products); 
   };
@@ -161,20 +187,25 @@ export default function App() {
       exchangeRate 
     };
 
-    const prevSales = [...sales]; const prevProducts = [...products];
-    const prevExpenses = [...expenses];
+    const prevSales = [...sales]; const prevProducts = [...products]; const prevExpenses = [...expenses];
 
     setSales([...sales, saleData]);
     setProducts(products.map(p => p.sku === newSale.sku ? { ...p, stock: p.stock - qty } : p));
     
     if(saleData.shippingCost && parseFloat(saleData.shippingCost) > 0) {
        setExpenses([...expenses, {
-         id: Date.now(), date: saleData.date, type: 'Envío', desc: `Envío Boleta ${saleData.ticketNo}`, 
+         id: Date.now(), date: saleData.date, type: 'Envío', desc: `Envío ${saleData.department}-${saleData.district} (${saleData.ticketNo})`, 
          amount: parseFloat(saleData.shippingCost), currency: saleData.currency, exchangeRate: saleData.exchangeRate
        }]);
     }
 
-    setNewSale({ date: getToday(), sku: '', price: '', currency: 'PEN', ticketNo: '', description: '', notes: '', size: '', color: '', model: '', customerName: '', docType: 'DNI', docNum: '', sex: 'M', phone: '', email: '', batchId: '', receiverType: 'Mismo Comprador', receiverName: '', receiverDoc: '', receiverPhone: '', destination: 'Lima Metropolitana', shippingCost: '' });
+    setNewSale({ 
+      date: getToday(), sku: '', price: '', currency: 'PEN', ticketNo: '', description: '', notes: '', size: '', color: '', model: '', 
+      customerName: '', docType: 'DNI', docNum: '', sex: 'M', phone: '', email: '', 
+      batchId: '', receiverType: 'Mismo Comprador', receiverName: '', receiverDoc: '', receiverPhone: '', 
+      destination: 'Lima Metropolitana', shippingCost: '', address: '',
+      department: '', province: '', district: '' 
+    });
 
     const success = await sendToSheet({ action: 'ADD_SALE', ...saleData });
     if (!success) { setSales(prevSales); setProducts(prevProducts); setExpenses(prevExpenses); alert("Error guardando venta"); }
@@ -183,11 +214,9 @@ export default function App() {
   const addExpense = async () => {
     if(!newExpense.amount) return;
     const expenseData = { ...newExpense, id: Date.now(), amount: parseFloat(newExpense.amount), exchangeRate };
-
     const prevExpenses = [...expenses];
     setExpenses([...expenses, expenseData]);
     setNewExpense({ ...newExpense, desc: '', amount: '', type: 'Seguro', currency: 'PEN', notes: '' });
-
     const success = await sendToSheet({ action: 'ADD_EXPENSE', ...expenseData });
     if (!success) setExpenses(prevExpenses);
   };
@@ -195,57 +224,49 @@ export default function App() {
   const voidSale = async (saleId: any, sku: string, qty: any) => {
     if (!confirm("¿Seguro que deseas anular esta venta? El stock será devuelto.")) return;
     setLoading(true);
-    
-    const prevSales = [...sales];
-    const prevProducts = [...products];
-
+    const prevSales = [...sales]; const prevProducts = [...products];
     setSales(sales.filter(s => s.id !== saleId));
     setProducts(products.map(p => p.sku === sku ? { ...p, stock: p.stock + parseInt(qty) } : p));
-
     const success = await sendToSheet({ action: 'DELETE_SALE', id: saleId, sku, qty });
-    if (!success) {
-      setSales(prevSales);
-      setProducts(prevProducts);
-      alert("Error al anular venta");
-    } else {
-      setLoading(false);
-      alert("Venta anulada correctamente");
-    }
+    if (!success) { setSales(prevSales); setProducts(prevProducts); alert("Error al anular venta"); } 
+    else { setLoading(false); alert("Venta anulada correctamente"); }
   };
 
-  // Filtros
-  const filteredSales = sales.filter(s => {
-    const term = searchTerm.toLowerCase();
-    return (
-      s.date.includes(term) ||
-      s.sku.toLowerCase().includes(term) ||
-      (s.ticketNo || '').toLowerCase().includes(term) ||
-      (s.destination || '').toLowerCase().includes(term)
-    );
-  }).slice().reverse();
+  // --- LOGIC UBIGEO ---
+  const handleDepartmentChange = (e: any) => {
+    setNewSale({ ...newSale, department: e.target.value, province: '', district: '' });
+  };
+  const handleProvinceChange = (e: any) => {
+    setNewSale({ ...newSale, province: e.target.value, district: '' });
+  };
+  
+  const getProvinces = () => newSale.department && peruLocations[newSale.department] ? Object.keys(peruLocations[newSale.department]) : [];
+  const getDistricts = () => newSale.department && newSale.province && peruLocations[newSale.department][newSale.province] ? peruLocations[newSale.department][newSale.province] : [];
 
-  // Filtro específico para Anulaciones
+  // --- FILTROS ---
+  const getFilteredResults = () => {
+    const term = globalSearch.toLowerCase();
+    if (searchTab === 'inventory') {
+      return products.filter(p => formatDisplayDate(p.date).includes(term) || p.sku.toLowerCase().includes(term) || p.name.toLowerCase().includes(term) || (p.store || '').toLowerCase().includes(term));
+    } else if (searchTab === 'sales') {
+      return sales.filter(s => formatDisplayDate(s.date).includes(term) || s.sku.toLowerCase().includes(term) || (s.ticketNo || '').toLowerCase().includes(term) || (s.customerName || '').toLowerCase().includes(term) || (s.docNum || '').toLowerCase().includes(term) || (s.destination || '').toLowerCase().includes(term) || (s.address || '').toLowerCase().includes(term)).slice().reverse();
+    } else if (searchTab === 'expenses') {
+      return expenses.filter(e => formatDisplayDate(e.date).includes(term) || e.type.toLowerCase().includes(term) || e.desc.toLowerCase().includes(term)).slice().reverse();
+    }
+    return [];
+  };
+
   const voidFilteredSales = sales.filter(s => {
     const term = voidSearchTerm.toLowerCase();
     if (!term) return true; 
-    return (
-      s.date.includes(term) ||
-      s.sku.toLowerCase().includes(term) ||
-      (s.ticketNo || '').toLowerCase().includes(term) ||
-      (s.docNum || '').toLowerCase().includes(term)
-    );
+    const visualDate = formatDisplayDate(s.date);
+    return (visualDate.includes(term) || s.sku.toLowerCase().includes(term) || (s.ticketNo || '').toLowerCase().includes(term) || (s.docNum || '').toLowerCase().includes(term));
   }).slice().reverse();
 
   const handleSkuChange = (e: any) => {
     const val = e.target.value;
     const found = products.find(p => p.sku === val);
-    setNewSale((prev: any) => ({
-      ...prev, 
-      sku: val, 
-      size: found ? found.size : prev.size,
-      color: found ? found.color : prev.color,
-      model: found ? found.model : prev.model
-    })); 
+    setNewSale((prev: any) => ({ ...prev, sku: val, size: found ? found.size : prev.size, color: found ? found.color : prev.color, model: found ? found.model : prev.model })); 
   };
 
   const toPEN = (amount: any, currency: string, rate = exchangeRate) => {
@@ -254,10 +275,7 @@ export default function App() {
   };
   
   const totalSalesPEN = sales.reduce((acc, s) => acc + toPEN(s.total, s.currency, s.exchangeRate), 0);
-  const totalCOGSPEN = sales.reduce((acc, s) => {
-    const p = products.find(prod => prod.sku === s.sku);
-    return acc + (p ? toPEN(p.cost, p.currency, p.exchangeRate) * s.qty : 0);
-  }, 0);
+  const totalCOGSPEN = sales.reduce((acc, s) => { const p = products.find(prod => prod.sku === s.sku); return acc + (p ? toPEN(p.cost, p.currency, p.exchangeRate) * s.qty : 0); }, 0);
   const totalExpensesPEN = expenses.reduce((acc, e) => acc + toPEN(e.amount, e.currency, e.exchangeRate), 0);
   const grossProfit = totalSalesPEN - totalCOGSPEN;
   const netProfit = grossProfit - totalExpensesPEN;
@@ -265,6 +283,7 @@ export default function App() {
 
   if (initialLoad) return <div style={styles.container}><h2 style={{textAlign:'center', marginTop:'20%'}}>Cargando Veridi System...</h2></div>;
 
+  // RENDERERS
   const renderInventory = () => (
     <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
       <div style={{...styles.card, flex: 1}}>
@@ -273,15 +292,14 @@ export default function App() {
         <div style={styles.inputGroup}>
             <label style={styles.label}>Foto del Producto</label>
             <input type="file" ref={fileInputRef} onChange={handleImageUpload} style={{color: 'white'}} accept="image/*" />
-            {newProduct.imageBase64 && <div style={{marginTop: 10}}><img src={newProduct.imageBase64} style={styles.imagePreview} alt="Preview" /> (Listo para subir)</div>}
-            {newProduct.image && !newProduct.imageBase64 && <div style={{marginTop: 10}}><img src={newProduct.image} style={styles.imagePreview} alt="Current" /> (Actual)</div>}
+            {newProduct.imageBase64 && <div style={{marginTop: 10}}><img src={newProduct.imageBase64} style={styles.imagePreview} alt="Preview" /></div>}
+            {newProduct.image && !newProduct.imageBase64 && <div style={{marginTop: 10}}><img src={newProduct.image} style={styles.imagePreview} alt="Current" /></div>}
         </div>
         <div style={styles.inputGroup}><label style={styles.label}>SKU</label><input style={styles.input} value={newProduct.sku} onChange={(e:any) => setNewProduct({...newProduct, sku: e.target.value})} placeholder="Ej: NK-001" disabled={!!newProduct.id} /></div>
+        <div style={styles.inputGroup}><label style={styles.label}>Nombre</label><input style={styles.input} value={newProduct.name} onChange={(e:any) => setNewProduct({...newProduct, name: e.target.value})} /></div>
+        <div style={styles.inputGroup}><label style={styles.label}>Tienda Adquisición (USA)</label><input style={styles.input} value={newProduct.store} onChange={(e:any) => setNewProduct({...newProduct, store: e.target.value})} placeholder="Ej: Ross, Macys..." /></div>
         <div style={styles.grid}>
-            <div style={{...styles.inputGroup, flex: 2}}><label style={styles.label}>Nombre</label><input style={styles.input} value={newProduct.name} onChange={(e:any) => setNewProduct({...newProduct, name: e.target.value})} /></div>
             <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Talla</label><input style={styles.input} value={newProduct.size} onChange={(e:any) => setNewProduct({...newProduct, size: e.target.value})} placeholder="S, M..." /></div>
-        </div>
-        <div style={styles.grid}>
             <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Color</label><input style={styles.input} value={newProduct.color} onChange={(e:any) => setNewProduct({...newProduct, color: e.target.value})} /></div>
             <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Modelo</label><input style={styles.input} value={newProduct.model} onChange={(e:any) => setNewProduct({...newProduct, model: e.target.value})} /></div>
         </div>
@@ -296,17 +314,16 @@ export default function App() {
           </div>
           <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Stock</label><input type="number" style={styles.input} value={newProduct.stock} onChange={(e:any) => setNewProduct({...newProduct, stock: e.target.value})} /></div>
         </div>
-        <div style={styles.inputGroup}><label style={styles.label}>Notas</label><textarea style={styles.textarea} value={newProduct.notes} onChange={(e:any) => setNewProduct({...newProduct, notes: e.target.value})} /></div>
         <button style={loading ? styles.btnLoading : (newProduct.id ? styles.btnWarning : styles.btnPrimary)} onClick={addProduct} disabled={loading}>{loading ? 'Procesando...' : (newProduct.id ? 'Actualizar Producto' : 'Guardar Producto')}</button>
-        {newProduct.id && <button style={{...styles.btnDelete, marginTop: 10, width: '100%'}} onClick={() => setNewProduct({ id: null, date: getToday(), name: '', sku: '', category: '', cost: '', stock: '', currency: 'PEN', description: '', notes: '', size: '', color: '', model: '', image: '', imageBase64: '' })}>Cancelar Edición</button>}
+        {newProduct.id && <button style={{...styles.btnDelete, marginTop: 10, width: '100%'}} onClick={() => setNewProduct({ id: null, date: getToday(), name: '', sku: '', category: '', cost: '', stock: '', currency: 'PEN', description: '', notes: '', size: '', color: '', model: '', image: '', imageBase64: '', store: '' })}>Cancelar Edición</button>}
       </div>
       <div style={{...styles.card, flex: 2, overflowX: 'auto'}}>
-        <h3>Inventario (Click para Editar)</h3>
-        <table style={styles.table}><thead><tr><th>Foto</th><th>SKU</th><th>Prod</th><th>Talla</th><th>Color</th><th>Stock</th></tr></thead>
-        <tbody>{products.map(p => (
+        <h3>Inventario Reciente</h3>
+        <table style={styles.table}><thead><tr><th>Foto</th><th>SKU</th><th>Prod</th><th>Tienda</th><th>Stock</th></tr></thead>
+        <tbody>{products.slice(-10).reverse().map(p => (
             <tr key={p.id} onClick={() => editProduct(p)} style={{cursor: 'pointer', background: newProduct.id === p.id ? '#334155' : 'transparent'}}>
                 <td style={styles.td}>{p.image ? <img src={p.image} style={styles.imagePreview} /> : '-'}</td>
-                <td style={styles.td}>{p.sku}</td><td style={styles.td}>{p.name}</td><td style={styles.td}>{p.size}</td><td style={styles.td}>{p.color}</td><td style={styles.td}>{p.stock}</td>
+                <td style={styles.td}>{p.sku}</td><td style={styles.td}>{p.name}</td><td style={styles.td}>{p.store}</td><td style={styles.td}>{p.stock}</td>
             </tr>
         ))}</tbody></table>
       </div>
@@ -345,12 +362,6 @@ export default function App() {
                 </select>
             </div>
             <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Número</label><input style={styles.input} value={newSale.docNum} onChange={(e:any) => setNewSale({...newSale, docNum: e.target.value})} /></div>
-            <div style={{...styles.inputGroup, flex: 1}}>
-                <label style={styles.label}>Sexo</label>
-                <select style={styles.select} value={newSale.sex} onChange={(e:any) => setNewSale({...newSale, sex: e.target.value})}>
-                    <option value="M">M</option><option value="F">F</option>
-                </select>
-            </div>
         </div>
         <div style={styles.grid}>
             <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Teléfono</label><input style={styles.input} value={newSale.phone} onChange={(e:any) => setNewSale({...newSale, phone: e.target.value})} /></div>
@@ -358,7 +369,9 @@ export default function App() {
         </div>
 
         <div style={styles.sectionTitle}>3. Envío y Orden</div>
-        <div style={styles.inputGroup}><label style={styles.label}>Link Orden de Compra/Lote</label><input style={styles.input} value={newSale.batchId} onChange={(e:any) => setNewSale({...newSale, batchId: e.target.value})} placeholder="Ej: Lote #54" /></div>
+        
+        {/* TITULO ACTUALIZADO */}
+        <div style={styles.inputGroup}><label style={styles.label}>Compra en conjunto - N° de boleta</label><input style={styles.input} value={newSale.batchId} onChange={(e:any) => setNewSale({...newSale, batchId: e.target.value})} placeholder="Ej: Lote #54" /></div>
         
         <div style={styles.inputGroup}>
             <label style={styles.label}>¿Quién Recibe?</label>
@@ -377,33 +390,48 @@ export default function App() {
             </div>
         )}
 
-        <div style={styles.grid}>
-            <div style={{...styles.inputGroup, flex: 1}}>
-                <label style={styles.label}>Destino</label>
-                <select style={styles.select} value={newSale.destination} onChange={(e:any) => setNewSale({...newSale, destination: e.target.value})}>
-                    <option>Lima Metropolitana</option><option>Provincias</option>
-                </select>
+        {/* SELECTORES DE DESTINO (DEPARTAMENTO - PROVINCIA - DISTRITO) */}
+        <div style={{background: '#334155', padding: 10, borderRadius: 5, marginBottom: 15}}>
+            <label style={{...styles.label, color: '#60a5fa', fontWeight: 'bold'}}>Ubicación de Envío</label>
+            <div style={styles.grid}>
+                <div style={{...styles.inputGroup, flex: 1}}>
+                    <label style={styles.label}>Departamento</label>
+                    <select style={styles.select} value={newSale.department} onChange={handleDepartmentChange}>
+                        <option value="">Seleccione...</option>
+                        {Object.keys(peruLocations).map(dept => <option key={dept} value={dept}>{dept}</option>)}
+                    </select>
+                </div>
+                <div style={{...styles.inputGroup, flex: 1}}>
+                    <label style={styles.label}>Provincia</label>
+                    <select style={styles.select} value={newSale.province} onChange={handleProvinceChange} disabled={!newSale.department}>
+                        <option value="">Seleccione...</option>
+                        {getProvinces().map((prov: string) => <option key={prov} value={prov}>{prov}</option>)}
+                    </select>
+                </div>
+                <div style={{...styles.inputGroup, flex: 1}}>
+                    <label style={styles.label}>Distrito</label>
+                    <select style={styles.select} value={newSale.district} onChange={(e:any) => setNewSale({...newSale, district: e.target.value})} disabled={!newSale.province}>
+                        <option value="">Seleccione...</option>
+                        {getDistricts().map((dist: string) => <option key={dist} value={dist}>{dist}</option>)}
+                    </select>
+                </div>
             </div>
-            <div style={{...styles.inputGroup, flex: 1}}>
-                <label style={styles.label}>Costo Envío (S/)</label>
-                <input type="number" style={styles.input} value={newSale.shippingCost} onChange={(e:any) => setNewSale({...newSale, shippingCost: e.target.value})} placeholder="0.00" />
-            </div>
+            <div style={styles.inputGroup}><label style={styles.label}>Dirección Exacta</label><input style={styles.input} value={newSale.address} onChange={(e:any) => setNewSale({...newSale, address: e.target.value})} placeholder="Av. Principal 123..." /></div>
         </div>
+
+        <div style={styles.inputGroup}><label style={styles.label}>Costo Envío (S/)</label><input type="number" style={styles.input} value={newSale.shippingCost} onChange={(e:any) => setNewSale({...newSale, shippingCost: e.target.value})} placeholder="0.00" /></div>
         
         <button style={loading ? styles.btnLoading : styles.btnPrimary} onClick={addSale} disabled={loading}>{loading ? 'Registrando...' : 'Confirmar Venta'}</button>
       </div>
-      
       <div style={{...styles.card, flex: 1.8, overflowX: 'auto'}}>
-        <h3>Historial de Ventas</h3>
-        <input style={styles.searchBar} placeholder="🔍 Buscar por Fecha, SKU, Boleta o Destino..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-        <table style={styles.table}><thead><tr><th>Fecha</th><th>Boleta</th><th>Prod</th><th>Cliente</th><th>Email</th><th>Total</th></tr></thead>
-        <tbody>{filteredSales.map(s => (
+        <h3>Últimas Ventas</h3>
+        <table style={styles.table}><thead><tr><th>Fecha</th><th>Boleta</th><th>Prod</th><th>Cliente</th><th>Total</th></tr></thead>
+        <tbody>{sales.slice(-10).reverse().map(s => (
             <tr key={s.id}>
-                <td style={styles.td}>{s.date}</td>
+                <td style={styles.td}>{formatDisplayDate(s.date)}</td>
                 <td style={styles.td}>{s.ticketNo || '-'}</td>
                 <td style={styles.td}>{s.productName}</td>
                 <td style={styles.td}>{s.customerName}</td>
-                <td style={styles.td}>{s.email}</td>
                 <td style={styles.td}>{s.currency === 'USD' ? '$' : 'S/'} {parseFloat(s.total).toFixed(2)}</td>
             </tr>
         ))}</tbody></table>
@@ -433,8 +461,8 @@ export default function App() {
         <button style={loading ? styles.btnLoading : styles.btnPrimary} onClick={addExpense} disabled={loading}>{loading ? 'Guardando...' : 'Guardar Gasto'}</button>
       </div>
       <div style={{...styles.card, flex: 2, overflowX: 'auto'}}>
-        <h3>Gastos</h3>
-        <table style={styles.table}><thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Monto</th></tr></thead><tbody>{expenses.map(e => (<tr key={e.id}><td style={styles.td}>{e.date}</td><td style={styles.td}>{e.type}</td><td style={styles.td}>{e.desc}</td><td style={styles.td}>{e.currency === 'USD' ? '$' : 'S/'} {parseFloat(e.amount).toFixed(2)}</td></tr>))}</tbody></table>
+        <h3>Gastos Recientes</h3>
+        <table style={styles.table}><thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Monto</th></tr></thead><tbody>{expenses.slice(-10).reverse().map(e => (<tr key={e.id}><td style={styles.td}>{formatDisplayDate(e.date)}</td><td style={styles.td}>{e.type}</td><td style={styles.td}>{e.desc}</td><td style={styles.td}>{e.currency === 'USD' ? '$' : 'S/'} {parseFloat(e.amount).toFixed(2)}</td></tr>))}</tbody></table>
       </div>
     </div>
   );
@@ -444,13 +472,8 @@ export default function App() {
       <h3 style={{color:'#f87171'}}>⚠️ Zona de Anulación de Ventas</h3>
       
       <div style={{marginBottom: 20}}>
-        <label style={styles.label}>Buscar Venta para Anular:</label>
-        <input 
-            style={styles.searchBar} 
-            placeholder="Escribe Boleta, DNI, Fecha (AAAA-MM-DD) o SKU..." 
-            value={voidSearchTerm} 
-            onChange={e => setVoidSearchTerm(e.target.value)} 
-        />
+        <label style={styles.label}>Buscar Venta para Anular (DD/MM/AAAA, Boleta, SKU, DNI):</label>
+        <input style={styles.searchBar} placeholder="Ej: 25/12/2023 o Boleta 001..." value={voidSearchTerm} onChange={e => setVoidSearchTerm(e.target.value)} />
       </div>
 
       <div style={{overflowX:'auto'}}>
@@ -459,7 +482,7 @@ export default function App() {
         <tbody>
           {voidFilteredSales.map(s => (
             <tr key={s.id}>
-              <td style={styles.td}>{s.date}</td>
+              <td style={styles.td}>{formatDisplayDate(s.date)}</td>
               <td style={styles.td}>{s.ticketNo || 'S/N'}</td>
               <td style={styles.td}>{s.customerName} {s.docNum ? `(${s.docNum})` : ''}</td>
               <td style={styles.td}>{s.productName} ({s.sku})</td>
@@ -475,6 +498,54 @@ export default function App() {
       </div>
     </div>
   );
+
+  const renderGlobalSearch = () => {
+      const results = getFilteredResults();
+      return (
+        <div style={styles.card}>
+            <h3>🔍 Búsqueda Avanzada Universal</h3>
+            <div style={{display: 'flex', gap: 10, marginBottom: 20}}>
+                <button style={styles.navBtn(searchTab === 'inventory')} onClick={() => setSearchTab('inventory')}>Inventario</button>
+                <button style={styles.navBtn(searchTab === 'sales')} onClick={() => setSearchTab('sales')}>Ventas</button>
+                <button style={styles.navBtn(searchTab === 'expenses')} onClick={() => setSearchTab('expenses')}>Gastos</button>
+            </div>
+            
+            <input style={styles.searchBar} placeholder="Escribe para buscar (Fecha, SKU, Tienda, DNI, Dirección, etc)..." value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} autoFocus />
+
+            <div style={{overflowX:'auto'}}>
+            <table style={styles.table}>
+                <thead>
+                    {searchTab === 'inventory' && <tr><th>Fecha</th><th>SKU</th><th>Producto</th><th>Tienda</th><th>Stock</th></tr>}
+                    {searchTab === 'sales' && <tr><th>Fecha</th><th>Boleta</th><th>Cliente</th><th>Dirección</th><th>Total</th></tr>}
+                    {searchTab === 'expenses' && <tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Monto</th></tr>}
+                </thead>
+                <tbody>
+                    {results.length > 0 ? results.map((r: any) => (
+                        <tr key={r.id}>
+                            <td style={styles.td}>{formatDisplayDate(r.date)}</td>
+                            
+                            {searchTab === 'inventory' && <>
+                                <td style={styles.td}>{r.sku}</td><td style={styles.td}>{r.name}</td><td style={styles.td}>{r.store}</td><td style={styles.td}>{r.stock}</td>
+                            </>}
+
+                            {searchTab === 'sales' && <>
+                                <td style={styles.td}>{r.ticketNo}</td>
+                                <td style={styles.td}>{r.customerName} ({r.docNum})</td>
+                                <td style={styles.td}>{r.address || `${r.department}-${r.district}`}</td>
+                                <td style={styles.td}>{r.currency === 'USD' ? '$' : 'S/'} {parseFloat(r.total).toFixed(2)}</td>
+                            </>}
+
+                            {searchTab === 'expenses' && <>
+                                <td style={styles.td}>{r.type}</td><td style={styles.td}>{r.desc}</td><td style={styles.td}>{r.currency === 'USD' ? '$' : 'S/'} {parseFloat(r.amount).toFixed(2)}</td>
+                            </>}
+                        </tr>
+                    )) : <tr><td colSpan={5} style={{textAlign: 'center', padding: 20, color: '#94a3b8'}}>No se encontraron resultados</td></tr>}
+                </tbody>
+            </table>
+            </div>
+        </div>
+      );
+  }
 
   return (
     <div style={styles.container}>
@@ -492,6 +563,7 @@ export default function App() {
             <button style={styles.navBtn(view === 'inventory')} onClick={() => setView('inventory')}>Inventario</button>
             <button style={styles.navBtn(view === 'sales')} onClick={() => setView('sales')}>Ventas</button>
             <button style={styles.navBtn(view === 'expenses')} onClick={() => setView('expenses')}>Gastos</button>
+            <button style={styles.navBtn(view === 'search')} onClick={() => setView('search')}>🔍 Búsqueda</button>
             <button style={{...styles.navBtn(view === 'void'), color:'#f87171', borderColor:'#f87171'}} onClick={() => setView('void')}>Anulaciones</button>
           </nav>
         </div>
@@ -507,6 +579,7 @@ export default function App() {
       {view === 'inventory' && renderInventory()}
       {view === 'sales' && renderSales()}
       {view === 'expenses' && renderExpenses()}
+      {view === 'search' && renderGlobalSearch()}
       {view === 'void' && renderVoid()}
     </div>
   );
