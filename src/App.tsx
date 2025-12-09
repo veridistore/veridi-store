@@ -6,6 +6,9 @@ const APP_PASSWORD = "Meraly123";
 // --- TU NUEVA URL (ACTUALIZADA EL 9 DIC - PERMISOS DRIVE) ---
 const API_URL = "https://script.google.com/macros/s/AKfycbyTtKl1Q73tn29ySdLd4UObvbHQXCVuaVB1DvSZwZUVAOStlOYnktg3MiUhN6zQp2itCA/exec";
 
+// --- API TIPO DE CAMBIO SUNAT (Proxy gratuito) ---
+const SUNAT_API = "https://api.apis.net.pe/v1/tipo-cambio-sunat";
+
 // --- LOGO ---
 const LOGO_URL = "https://lh3.googleusercontent.com/d/1obDjT8NmSP-Z9L37P7fR5nPVBEdzL-r1";
 
@@ -52,25 +55,26 @@ const styles = {
   logoText: { fontSize: '1.8rem', fontWeight: 'bold', color: 'white', background: '#dc2626', padding: '10px 20px', borderRadius: '5px' },
   headerControls: { display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' },
   exchangeRateBox: { display: 'flex', alignItems: 'center', gap: '10px', background: '#1e293b', padding: '5px 15px', borderRadius: '20px', border: '1px solid #475569' },
-  exchangeInput: { width: '60px', padding: '5px', borderRadius: '5px', border: 'none', background: '#0f172a', color: 'white', textAlign: 'center', fontWeight: 'bold' },
+  exchangeInput: { width: '80px', padding: '5px', borderRadius: '5px', border: 'none', background: '#0f172a', color: '#4ade80', textAlign: 'center' as 'center', fontWeight: 'bold' },
   nav: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
   navBtn: (active: boolean) => ({
     background: active ? '#2563eb' : 'transparent', color: 'white', border: active ? 'none' : '1px solid #475569',
     padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', transition: '0.3s', whiteSpace: 'nowrap'
   }),
   card: { backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', marginBottom: '20px' },
+  reportCard: { backgroundColor: '#fff', color: '#1e293b', padding: '20px', borderRadius: '5px', marginBottom: '20px' }, // Estilo papel
   inputGroup: { marginBottom: '15px' },
   label: { display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9rem' },
   inputWrapper: { display: 'flex', gap: '10px' },
   input: { width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: 'white', color: '#0f172a', flexGrow: 1 },
   inputDisabled: { width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #334155', background: '#334155', color: '#94a3b8', flexGrow: 1, cursor: 'not-allowed' },
-  textarea: { width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: 'white', color: '#0f172a', minHeight: '60px' },
   select: { padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: 'white', color: '#0f172a', width: '100%' },
   selectCurrency: { padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: '#334155', color: 'white', fontWeight: 'bold', cursor: 'pointer' },
   btnPrimary: { width: '100%', padding: '12px', background: '#1d4ed8', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' },
   btnWarning: { width: '100%', padding: '12px', background: '#f59e0b', color: 'black', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' },
   btnDelete: { padding: '5px 10px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '0.8rem' },
   table: { width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '0.9rem' },
+  financialTable: { width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '1rem', color: '#000' },
   th: { textAlign: 'left', padding: '10px', borderBottom: '1px solid #334155', color: '#94a3b8' },
   td: { padding: '10px', borderBottom: '1px solid #334155' },
   statCard: { flex: 1, backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #334155', minWidth: '200px' },
@@ -78,7 +82,14 @@ const styles = {
   productInfo: { marginTop: '5px', fontSize: '0.9rem', color: '#4ade80' },
   sectionTitle: { borderBottom: '1px solid #475569', paddingBottom: '5px', marginBottom: '15px', color: '#60a5fa', fontWeight: 'bold' },
   imagePreview: { width: '50px', height: '50px', objectFit: 'cover', borderRadius: '5px' },
-  searchBar: { padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: '#0f172a', color: 'white', marginBottom: '20px', width: '100%' }
+  searchBar: { padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: '#0f172a', color: 'white', marginBottom: '20px', width: '100%' },
+  // Report Styles
+  reportRow: (isBold = false, isTotal = false) => ({
+    display: 'flex', justifyContent: 'space-between', padding: '8px 0', 
+    borderBottom: isTotal ? '2px solid #000' : '1px solid #e2e8f0',
+    fontWeight: isBold || isTotal ? 'bold' : 'normal',
+    fontSize: isTotal ? '1.1rem' : '1rem'
+  })
 };
 
 export default function App() {
@@ -88,17 +99,21 @@ export default function App() {
   const [loginError, setLoginError] = useState(false);
 
   // --- ESTADOS DE LA APP ---
-  const [view, setView] = useState('dashboard');
+  const [view, setView] = useState('inventory'); // Cambié la vista inicial a Inventario ya que el Dashboard va al final
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
   const [exchangeRate, setExchangeRate] = useState<any>(3.75); 
   const [logoError, setLogoError] = useState(false);
 
+  // --- ESTADOS FINANCIEROS (Filtros) ---
+  const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1); // 1-12
+  const [reportYear, setReportYear] = useState(new Date().getFullYear());
+
   const [products, setProducts] = useState<any[]>([]);
   const [sales, setSales] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   
-  // Filtros
+  // Filtros de Búsqueda
   const [globalSearch, setGlobalSearch] = useState('');
   const [searchTab, setSearchTab] = useState('inventory');
   const [voidSearchTerm, setVoidSearchTerm] = useState('');
@@ -128,6 +143,17 @@ export default function App() {
   const foundProduct = products.find(p => safeString(p.sku) === safeString(newSale.sku));
 
   useEffect(() => {
+    // 1. Obtener Tipo de Cambio SUNAT
+    fetch(SUNAT_API)
+      .then(res => res.json())
+      .then(data => {
+        if(data && data.venta) {
+            setExchangeRate(data.venta);
+        }
+      })
+      .catch(err => console.log("Error obteniendo TC SUNAT, usando valor manual."));
+
+    // 2. Obtener Datos
     if (isAuthenticated) {
         fetch(API_URL).then(res => res.json()).then(data => {
             setProducts(data.products || []); setSales(data.sales || []); setExpenses(data.expenses || []); setInitialLoad(false);
@@ -154,6 +180,44 @@ export default function App() {
     } catch (error) { console.error(error); setLoading(false); alert("Error de conexión"); return false; }
   };
 
+  // --- LOGICA FINANCIERA ---
+  const toPEN = (amount: any, currency: string, rate = exchangeRate) => {
+    const val = parseFloat(amount || 0);
+    return currency === 'USD' ? val * rate : val;
+  };
+
+  // 1. Filtrar transacciones por Mes y Año seleccionado
+  const filteredSales = sales.filter(s => {
+    const d = new Date(s.date);
+    // Ajuste de zona horaria simple: usar string split es más seguro para fechas YYYY-MM-DD
+    const [y, m] = s.date.split('-'); 
+    return parseInt(y) === reportYear && parseInt(m) === reportMonth;
+  });
+
+  const filteredExpenses = expenses.filter(e => {
+    const [y, m] = e.date.split('-');
+    return parseInt(y) === reportYear && parseInt(m) === reportMonth;
+  });
+
+  // 2. Cálculos para Estado de Resultados
+  const incomeTotal = filteredSales.reduce((acc, s) => acc + toPEN(s.total, s.currency, s.exchangeRate), 0);
+  
+  // Costo de Ventas (COGS): Buscar cuánto costó cada producto vendido en ese periodo
+  const cogsTotal = filteredSales.reduce((acc, s) => {
+      const p = products.find(prod => safeString(prod.sku) === safeString(s.sku));
+      // Si el producto ya no existe, usamos 0 (o un costo promedio si tuvieramos)
+      const cost = p ? toPEN(p.cost, p.currency, p.exchangeRate) : 0; 
+      return acc + (cost * s.qty);
+  }, 0);
+
+  const grossProfit = incomeTotal - cogsTotal;
+  const expensesTotal = filteredExpenses.reduce((acc, e) => acc + toPEN(e.amount, e.currency, e.exchangeRate), 0);
+  const netProfit = grossProfit - expensesTotal;
+
+  // 3. Cálculos para Balance General (Simplificado)
+  // Valor del Inventario Actual (Activo Realizable)
+  const inventoryValue = products.reduce((acc, p) => acc + (toPEN(p.cost, p.currency, exchangeRate) * parseInt(p.stock)), 0);
+  
   const handleImageUpload = (e: any) => {
     const file = e.target.files[0];
     if (file) {
@@ -169,7 +233,6 @@ export default function App() {
           canvas.height = img.height * scaleSize;
           ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
           const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7); 
-          // MEJORA: Actualización funcional del estado para no perder datos si escribes rápido
           setNewProduct((prev: any) => ({ ...prev, imageBase64: compressedBase64 }));
         };
         img.src = event.target.result;
@@ -328,17 +391,6 @@ export default function App() {
     setNewSale((prev: any) => ({ ...prev, sku: val, size: found ? found.size : prev.size, color: found ? found.color : prev.color, model: found ? found.model : prev.model })); 
   };
 
-  const toPEN = (amount: any, currency: string, rate = exchangeRate) => {
-    const val = parseFloat(amount || 0);
-    return currency === 'USD' ? val * rate : val;
-  };
-  
-  const totalSalesPEN = sales.reduce((acc, s) => acc + toPEN(s.total, s.currency, s.exchangeRate), 0);
-  const totalCOGSPEN = sales.reduce((acc, s) => { const p = products.find(prod => safeString(prod.sku) === safeString(s.sku)); return acc + (p ? toPEN(p.cost, p.currency, p.exchangeRate) * s.qty : 0); }, 0);
-  const totalExpensesPEN = expenses.reduce((acc, e) => acc + toPEN(e.amount, e.currency, e.exchangeRate), 0);
-  const grossProfit = totalSalesPEN - totalCOGSPEN;
-  const netProfit = grossProfit - totalExpensesPEN;
-
   // --- RENDER LOGIN SCREEN ---
   if (!isAuthenticated) {
     return (
@@ -368,6 +420,93 @@ export default function App() {
 
   // --- RENDER MAIN APP ---
   if (initialLoad) return <div style={styles.container}><h2 style={{textAlign:'center', marginTop:'20%'}}>Cargando Veridi System...</h2></div>;
+
+  const renderDashboard = () => (
+    <div style={{display: 'flex', flexDirection: 'column', gap: '20px'}}>
+      
+      {/* 1. BARRA DE FILTROS */}
+      <div style={styles.card}>
+        <h3 style={{color: '#60a5fa'}}>📅 Filtros de Reporte</h3>
+        <div style={{display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap'}}>
+            <div>
+                <label style={styles.label}>Año</label>
+                <select style={styles.select} value={reportYear} onChange={(e) => setReportYear(parseInt(e.target.value))}>
+                    {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+            </div>
+            <div>
+                <label style={styles.label}>Mes</label>
+                <select style={styles.select} value={reportMonth} onChange={(e) => setReportMonth(parseInt(e.target.value))}>
+                    {["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"].map((m, i) => (
+                        <option key={i} value={i+1}>{m}</option>
+                    ))}
+                </select>
+            </div>
+        </div>
+      </div>
+
+      <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
+        
+        {/* 2. ESTADO DE RESULTADOS (Izquierda) */}
+        <div style={{...styles.statCard, flex: 1, backgroundColor: 'white', color: '#1e293b'}}>
+          <h2 style={{textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '10px'}}>ESTADO DE RESULTADOS</h2>
+          <p style={{textAlign: 'center', color: '#64748b', fontSize: '0.9rem', marginBottom: '20px'}}>
+            Al {new Date(reportYear, reportMonth, 0).getDate()} de {["","Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][reportMonth]} del {reportYear}
+          </p>
+          
+          <div style={styles.reportRow(true)}>
+            <span>(+) VENTAS NETAS</span>
+            <span>S/ {incomeTotal.toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
+          </div>
+          <div style={{...styles.reportRow(), color: '#ef4444'}}>
+            <span>(-) Costo de Ventas</span>
+            <span>(S/ {cogsTotal.toLocaleString('es-PE', {minimumFractionDigits: 2})})</span>
+          </div>
+          
+          <div style={styles.reportRow(true, true)}>
+            <span>(=) UTILIDAD BRUTA</span>
+            <span style={{color: grossProfit >= 0 ? '#16a34a' : '#ef4444'}}>S/ {grossProfit.toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
+          </div>
+
+          <div style={{...styles.reportRow(), color: '#ef4444', marginTop: '10px'}}>
+            <span>(-) Gastos Operativos</span>
+            <span>(S/ {expensesTotal.toLocaleString('es-PE', {minimumFractionDigits: 2})})</span>
+          </div>
+
+          <div style={{...styles.reportRow(true, true), marginTop: '20px', fontSize: '1.3rem', borderBottom: '4px double #000'}}>
+            <span>(=) UTILIDAD NETA</span>
+            <span style={{color: netProfit >= 0 ? '#16a34a' : '#ef4444'}}>S/ {netProfit.toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
+          </div>
+
+          <div style={{marginTop: '20px', fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic'}}>
+            * Nota: El Costo de Ventas se calcula basado en el costo individual de cada producto vendido en este periodo.
+          </div>
+        </div>
+
+        {/* 3. BALANCE / SITUACIÓN (Derecha) */}
+        <div style={{...styles.statCard, flex: 1}}>
+          <h3 style={{color: '#fb923c'}}>📊 Indicadores Financieros</h3>
+          
+          <div style={{marginTop: '20px'}}>
+            <div style={styles.label}>Valor de Inventario Actual (Activo)</div>
+            <div style={{fontSize: '2rem', fontWeight: 'bold', color: '#60a5fa'}}>
+              S/ {inventoryValue.toLocaleString('es-PE', {minimumFractionDigits: 2})}
+            </div>
+            <p style={{fontSize: '0.8rem', color: '#94a3b8'}}>Dinero invertido en productos en stock hoy.</p>
+          </div>
+
+          <div style={{marginTop: '30px'}}>
+             <div style={styles.label}>Margen de Ganancia (Periodo)</div>
+             <div style={{fontSize: '2rem', fontWeight: 'bold', color: incomeTotal > 0 ? '#fbbf24' : '#94a3b8'}}>
+               {incomeTotal > 0 ? ((netProfit / incomeTotal) * 100).toFixed(1) : '0.0'}%
+             </div>
+             <p style={{fontSize: '0.8rem', color: '#94a3b8'}}>Por cada S/ 100 que vendes, ganas S/ {incomeTotal > 0 ? ((netProfit / incomeTotal) * 100).toFixed(1) : '0'}.</p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
 
   const renderInventory = () => (
     <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
@@ -692,34 +831,29 @@ export default function App() {
         </div>
         <div style={styles.headerControls}>
           <div style={styles.exchangeRateBox}>
-            <span style={{color: '#94a3b8', fontSize: '0.9rem'}}>T.C. Hoy: $1 = S/</span>
+            <span style={{color: '#94a3b8', fontSize: '0.9rem'}}>T.C. (SUNAT/Manual): $1 = S/</span>
             <input type="number" step="0.01" style={styles.exchangeInput} value={exchangeRate} onChange={(e:any) => setExchangeRate(e.target.value)} />
           </div>
           <nav style={styles.nav}>
-            <button style={styles.navBtn(view === 'dashboard')} onClick={() => setView('dashboard')}>Resumen</button>
             <button style={styles.navBtn(view === 'inventory')} onClick={() => setView('inventory')}>Inventario</button>
             <button style={styles.navBtn(view === 'sales')} onClick={() => setView('sales')}>Ventas</button>
             <button style={styles.navBtn(view === 'expenses')} onClick={() => setView('expenses')}>Gastos</button>
             <button style={styles.navBtn(view === 'search')} onClick={() => setView('search')}>🔍 Búsqueda</button>
             <button style={{...styles.navBtn(view === 'admin_void'), color:'#fb923c', borderColor:'#fb923c'}} onClick={() => setView('admin_void')}>Admin Datos</button>
             <button style={{...styles.navBtn(view === 'void'), color:'#f87171', borderColor:'#f87171'}} onClick={() => setView('void')}>Anular Ventas</button>
+            {/* MOVÍ EL DASHBOARD AL FINAL COMO PEDISTE */}
+            <button style={{...styles.navBtn(view === 'dashboard'), border: '1px solid #4ade80', color: view === 'dashboard' ? 'black' : '#4ade80', background: view === 'dashboard' ? '#4ade80' : 'transparent'}} onClick={() => setView('dashboard')}>📊 Resumen Financiero</button>
           </nav>
         </div>
       </div>
-      {view === 'dashboard' && ( 
-        <div style={styles.grid}>
-          <div style={styles.statCard}><div style={styles.label}>Ventas Totales</div><div style={{fontSize: '1.8rem', fontWeight: 'bold'}}>S/ {totalSalesPEN.toFixed(2)}</div></div>
-          <div style={styles.statCard}><div style={styles.label}>Utilidad Bruta</div><div style={{fontSize: '1.8rem', fontWeight: 'bold', color: '#4ade80'}}>S/ {grossProfit.toFixed(2)}</div></div>
-          <div style={styles.statCard}><div style={styles.label}>Gastos Totales</div><div style={{fontSize: '1.8rem', fontWeight: 'bold', color: '#f87171'}}>S/ {totalExpensesPEN.toFixed(2)}</div></div>
-          <div style={styles.statCard}><div style={styles.label}>Utilidad Neta</div><div style={{fontSize: '1.8rem', fontWeight: 'bold', color: netProfit >= 0 ? '#4ade80' : '#f87171'}}>S/ {netProfit.toFixed(2)}</div></div>
-        </div>
-      )}
+      
       {view === 'inventory' && renderInventory()}
       {view === 'sales' && renderSales()}
       {view === 'expenses' && renderExpenses()}
       {view === 'search' && renderGlobalSearch()}
       {view === 'admin_void' && renderAdminVoid()}
       {view === 'void' && renderVoid()}
+      {view === 'dashboard' && renderDashboard()}
     </div>
   );
 }
