@@ -79,7 +79,6 @@ const styles = {
   btnPrimary: { width: '100%', padding: '12px', background: '#1d4ed8', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' },
   btnWarning: { width: '100%', padding: '12px', background: '#f59e0b', color: 'black', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' },
   btnDelete: { padding: '5px 10px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '0.8rem' },
-  // AÑADIDO: Estilo faltante para btnLoading
   btnLoading: { width: '100%', padding: '12px', background: '#64748b', color: '#e2e8f0', border: 'none', borderRadius: '5px', cursor: 'wait', fontWeight: 'bold', marginTop: '10px' },
   table: { width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '0.9rem' },
   th: { textAlign: 'left', padding: '10px', borderBottom: '1px solid #334155', color: '#94a3b8' },
@@ -519,7 +518,6 @@ export default function App() {
       </div>
 
       <div style={{display: 'flex', gap: '20px', flexDirection: 'column'}}>
-        {/* Usamos flexWrap: 'wrap' para que no dependa de window.innerWidth */}
         <div style={{display: 'flex', gap: '20px', flexWrap: 'wrap'}}>
             
             {/* 3. ESTADO DE RESULTADOS (Izquierda) */}
@@ -792,6 +790,129 @@ export default function App() {
     </div>
   );
 
+  const renderVoid = () => (
+    <div style={{...styles.card}}>
+      <h3 style={{color:'#f87171'}}>⚠️ Anulación de Ventas (Stock retorna)</h3>
+      <div style={{marginBottom: 20}}>
+        <label style={styles.label}>Buscar Venta (DD/MM/AAAA, Boleta, SKU, DNI):</label>
+        <input style={styles.searchBar} placeholder="Ej: 25/12/2023 o Boleta 001..." value={voidSearchTerm} onChange={e => setVoidSearchTerm(e.target.value)} />
+      </div>
+      <div style={{overflowX:'auto'}}>
+      <table style={styles.table}>
+        <thead><tr><th>Fecha</th><th>Boleta</th><th>Cliente (DNI)</th><th>Producto</th><th>Total</th><th>Acción</th></tr></thead>
+        <tbody>
+          {voidFilteredSales.map(s => (
+            <tr key={s.id}>
+              <td style={styles.td}>{formatDisplayDate(s.date)}</td>
+              <td style={styles.td}>{s.ticketNo || 'S/N'}</td>
+              <td style={styles.td}>{s.customerName} {s.docNum ? `(${s.docNum})` : ''}</td>
+              <td style={styles.td}>{s.productName} ({s.sku})</td>
+              <td style={styles.td}>{s.currency === 'USD' ? '$' : 'S/'} {parseFloat(s.total).toFixed(2)}</td>
+              <td style={styles.td}>
+                <button style={styles.btnDelete} onClick={() => voidSale(s.id, s.sku, s.qty)}>ANULAR 🗑️</button>
+              </td>
+            </tr>
+          ))}
+          {voidFilteredSales.length === 0 && <tr><td colSpan={6} style={{padding: 20, textAlign: 'center', color: '#94a3b8'}}>No se encontraron ventas con esos datos.</td></tr>}
+        </tbody>
+      </table>
+      </div>
+    </div>
+  );
+
+  const renderAdminVoid = () => (
+      <div style={{display: 'flex', gap: '20px', flexWrap: 'wrap'}}>
+        <div style={{...styles.card, flex: 1, minWidth: '300px'}}>
+            <h3 style={{color:'#fb923c'}}>🗑️ Eliminar Producto (Inventario)</h3>
+            <p style={{fontSize:'0.8rem', color:'#94a3b8'}}>Cuidado: Esto borra el producto permanentemente.</p>
+            <input style={styles.searchBar} placeholder="Buscar SKU o Nombre..." value={adminProductSearch} onChange={e => setAdminProductSearch(e.target.value)} />
+            <div style={{overflowY: 'auto', maxHeight: '400px'}}>
+                <table style={styles.table}>
+                    <thead><tr><th>SKU</th><th>Nombre</th><th>Acción</th></tr></thead>
+                    <tbody>
+                        {adminFilteredProducts.map(p => (
+                            <tr key={p.id}>
+                                <td style={styles.td}>{p.sku}</td>
+                                <td style={styles.td}>{p.name}</td>
+                                <td style={styles.td}><button style={styles.btnDelete} onClick={() => deleteProduct(p.id)}>X</button></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div style={{...styles.card, flex: 1, minWidth: '300px'}}>
+            <h3 style={{color:'#fb923c'}}>🗑️ Eliminar Gasto</h3>
+            <p style={{fontSize:'0.8rem', color:'#94a3b8'}}>Borra el registro financiero.</p>
+            <input style={styles.searchBar} placeholder="Buscar Concepto o Monto..." value={adminExpenseSearch} onChange={e => setAdminExpenseSearch(e.target.value)} />
+            <div style={{overflowY: 'auto', maxHeight: '400px'}}>
+                <table style={styles.table}>
+                    <thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th><th>Acción</th></tr></thead>
+                    <tbody>
+                        {adminFilteredExpenses.map(e => (
+                            <tr key={e.id}>
+                                <td style={styles.td}>{formatDisplayDate(e.date)}</td>
+                                <td style={styles.td}>{e.desc}</td>
+                                <td style={styles.td}>{e.amount}</td>
+                                <td style={styles.td}><button style={styles.btnDelete} onClick={() => deleteExpense(e.id)}>X</button></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+      </div>
+  );
+
+  const renderGlobalSearch = () => {
+      const results = getFilteredResults();
+      return (
+        <div style={styles.card}>
+            <h3>🔍 Búsqueda Avanzada Universal</h3>
+            <div style={{display: 'flex', gap: 10, marginBottom: 20}}>
+                <button style={styles.navBtn(searchTab === 'inventory')} onClick={() => setSearchTab('inventory')}>Inventario</button>
+                <button style={styles.navBtn(searchTab === 'sales')} onClick={() => setSearchTab('sales')}>Ventas</button>
+                <button style={styles.navBtn(searchTab === 'expenses')} onClick={() => setSearchTab('expenses')}>Gastos</button>
+            </div>
+            
+            <input style={styles.searchBar} placeholder="Escribe para buscar (Fecha, SKU, Tienda, DNI, Dirección, etc)..." value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} autoFocus />
+
+            <div style={{overflowX:'auto'}}>
+            <table style={styles.table}>
+                <thead>
+                    {searchTab === 'inventory' && <tr><th>Fecha</th><th>SKU</th><th>Producto</th><th>Tienda</th><th>Stock</th></tr>}
+                    {searchTab === 'sales' && <tr><th>Fecha</th><th>Boleta</th><th>Cliente</th><th>Dirección</th><th>Total</th></tr>}
+                    {searchTab === 'expenses' && <tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Monto</th></tr>}
+                </thead>
+                <tbody>
+                    {results.length > 0 ? results.map((r: any) => (
+                        <tr key={r.id}>
+                            <td style={styles.td}>{formatDisplayDate(r.date)}</td>
+                            
+                            {searchTab === 'inventory' && <>
+                                <td style={styles.td}>{r.sku}</td><td style={styles.td}>{r.name}</td><td style={styles.td}>{r.store}</td><td style={styles.td}>{r.stock}</td>
+                            </>}
+
+                            {searchTab === 'sales' && <>
+                                <td style={styles.td}>{r.ticketNo}</td>
+                                <td style={styles.td}>{r.customerName} ({r.docNum})</td>
+                                <td style={styles.td}>{r.address || `${r.department}-${r.district}`}</td>
+                                <td style={styles.td}>{r.currency === 'USD' ? '$' : 'S/'} {parseFloat(r.total).toFixed(2)}</td>
+                            </>}
+
+                            {searchTab === 'expenses' && <>
+                                <td style={styles.td}>{r.type}</td><td style={styles.td}>{r.desc}</td><td style={styles.td}>{r.currency === 'USD' ? '$' : 'S/'} {parseFloat(r.amount).toFixed(2)}</td>
+                            </>}
+                        </tr>
+                    )) : <tr><td colSpan={5} style={{textAlign: 'center', padding: 20, color: '#94a3b8'}}>No se encontraron resultados</td></tr>}
+                </tbody>
+            </table>
+            </div>
+        </div>
+      );
+  }
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -801,7 +922,6 @@ export default function App() {
         <div style={styles.headerControls}>
           <div style={styles.exchangeRateBox}>
             <span style={{color: '#94a3b8', fontSize: '0.9rem'}}>T.C. (SUNAT/Intl): $1 = S/</span>
-            {/* INPUT DINAMICO CON COLOR VERDE/ROJO */}
             <input 
                 type="number" 
                 step="0.01" 
@@ -809,7 +929,7 @@ export default function App() {
                 value={exchangeRate} 
                 onChange={(e:any) => {
                     setExchangeRate(e.target.value);
-                    setIsRateConnected(false); // Si editas manual, se pone rojo
+                    setIsRateConnected(false); 
                 }} 
             />
             <button style={styles.refreshBtn} onClick={fetchExchangeRate} title="Forzar Actualización" disabled={updatingRate}>
