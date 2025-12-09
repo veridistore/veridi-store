@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 // --- CONFIGURACIÓN DE SEGURIDAD ---
-const APP_PASSWORD = "Meraly123"; // <--- CONTRASEÑA ACTUALIZADA
+const APP_PASSWORD = "Meraly123"; 
 
-// --- TU NUEVA URL ---
-const API_URL = "https://script.google.com/macros/s/AKfycbw6vYJgWbf3mCLkc3Xki0mgCE6ZsafrgDWCWKZ82Jbq5KDbJDRQr0TgZCJurHDqA3quZg/exec";
+// --- TU NUEVA URL (ACTUALIZADA EL 9 DIC) ---
+const API_URL = "https://script.google.com/macros/s/AKfycbyp_-u45KlaGA8kj9ht4b87zAT-oQKK-qJoLEViOHzwxVPiXPOk07kWfw0M4B6McsG46w/exec";
 
 // --- LOGO ---
 const LOGO_URL = "https://lh3.googleusercontent.com/d/1obDjT8NmSP-Z9L37P7fR5nPVBEdzL-r1";
@@ -128,7 +128,6 @@ export default function App() {
   const foundProduct = products.find(p => safeString(p.sku) === safeString(newSale.sku));
 
   useEffect(() => {
-    // Solo carga datos si está autenticado para ahorrar recursos, o carga en background
     if (isAuthenticated) {
         fetch(API_URL).then(res => res.json()).then(data => {
             setProducts(data.products || []); setSales(data.sales || []); setExpenses(data.expenses || []); setInitialLoad(false);
@@ -170,7 +169,8 @@ export default function App() {
           canvas.height = img.height * scaleSize;
           ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
           const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7); 
-          setNewProduct({ ...newProduct, imageBase64: compressedBase64 });
+          // MEJORA: Actualización funcional del estado para no perder datos si escribes rápido
+          setNewProduct((prev: any) => ({ ...prev, imageBase64: compressedBase64 }));
         };
         img.src = event.target.result;
       };
