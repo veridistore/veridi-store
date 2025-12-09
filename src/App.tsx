@@ -56,10 +56,9 @@ const styles = {
   logoText: { fontSize: '1.8rem', fontWeight: 'bold', color: 'white', background: '#dc2626', padding: '10px 20px', borderRadius: '5px' },
   headerControls: { display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' },
   exchangeRateBox: { display: 'flex', alignItems: 'center', gap: '10px', background: '#1e293b', padding: '10px 20px', borderRadius: '10px', border: '1px solid #475569' },
-  // AUMENTADO: Tamaño de letra para el input del TC y cambio de color dinámico en el componente
   exchangeInput: (isLive: boolean) => ({ 
     width: '100px', padding: '5px', borderRadius: '5px', border: 'none', background: '#0f172a', 
-    color: isLive ? '#4ade80' : '#ef4444', // Verde si es live, Rojo si falló/manual
+    color: isLive ? '#4ade80' : '#ef4444', 
     textAlign: 'center' as 'center', fontWeight: 'bold', fontSize: '1.4rem' 
   }),
   refreshBtn: { background: 'transparent', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '1.5rem', padding: '0 5px', display: 'flex', alignItems: 'center' },
@@ -80,6 +79,8 @@ const styles = {
   btnPrimary: { width: '100%', padding: '12px', background: '#1d4ed8', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' },
   btnWarning: { width: '100%', padding: '12px', background: '#f59e0b', color: 'black', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' },
   btnDelete: { padding: '5px 10px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '0.8rem' },
+  // AÑADIDO: Estilo faltante para btnLoading
+  btnLoading: { width: '100%', padding: '12px', background: '#64748b', color: '#e2e8f0', border: 'none', borderRadius: '5px', cursor: 'wait', fontWeight: 'bold', marginTop: '10px' },
   table: { width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '0.9rem' },
   th: { textAlign: 'left', padding: '10px', borderBottom: '1px solid #334155', color: '#94a3b8' },
   td: { padding: '10px', borderBottom: '1px solid #334155' },
@@ -106,7 +107,6 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
   const [exchangeRate, setExchangeRate] = useState<any>(3.75); 
-  // ESTADO NUEVO: Controla si la conexión fue exitosa (true) o fallida/manual (false)
   const [isRateConnected, setIsRateConnected] = useState(false);
   const [updatingRate, setUpdatingRate] = useState(false);
   const [logoError, setLogoError] = useState(false);
@@ -150,33 +150,28 @@ export default function App() {
 
   const fetchExchangeRate = async () => {
     setUpdatingRate(true);
-    // Reiniciamos estado de conexión a false antes de intentar
     setIsRateConnected(false);
     try {
         const response = await fetch(`${SUNAT_API_BASE}?_=${Date.now()}`); 
         const data = await response.json();
         if (data && data.venta) {
             setExchangeRate(data.venta);
-            setIsRateConnected(true); // ¡Éxito! Verde
+            setIsRateConnected(true); 
         } else {
             throw new Error("Sin datos SUNAT");
         }
     } catch (err) {
-        // Falló SUNAT, intentamos backup silenciosamente
         try {
             const resFallback = await fetch(FALLBACK_API);
             const dataFallback = await resFallback.json();
             if (dataFallback && dataFallback.rates && dataFallback.rates.PEN) {
                 setExchangeRate(dataFallback.rates.PEN);
-                // Fallback es útil pero no es SUNAT oficial, lo dejamos en rojo o podríamos usar ámbar. 
-                // Por simplicidad, rojo indica "Verificar", verde "Oficial".
                 setIsRateConnected(false); 
             }
         } catch (err2) {
             console.error("Error total TC", err2);
             setIsRateConnected(false);
         }
-        // Eliminada la alerta (alert) para que no moleste
     } finally {
         setUpdatingRate(false);
     }
@@ -523,80 +518,83 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
-        
-        {/* 3. ESTADO DE RESULTADOS (Izquierda) */}
-        <div style={{...styles.statCard, flex: 1, backgroundColor: 'white', color: '#1e293b'}}>
-          <h2 style={{textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '10px'}}>ESTADO DE RESULTADOS</h2>
-          <p style={{textAlign: 'center', color: '#64748b', fontSize: '0.9rem', marginBottom: '20px'}}>
-            Al {new Date(reportYear, reportMonth, 0).getDate()} de {["","Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][reportMonth]} del {reportYear}
-          </p>
-          
-          <div style={styles.reportRow(true)}>
-            <span>(+) VENTAS NETAS</span>
-            <span>S/ {incomeTotal.toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
-          </div>
-          <div style={{...styles.reportRow(), color: '#ef4444'}}>
-            <span>(-) Costo de Ventas</span>
-            <span>(S/ {cogsTotal.toLocaleString('es-PE', {minimumFractionDigits: 2})})</span>
-          </div>
-          
-          <div style={styles.reportRow(true, true)}>
-            <span>(=) UTILIDAD BRUTA</span>
-            <span style={{color: grossProfit >= 0 ? '#16a34a' : '#ef4444'}}>S/ {grossProfit.toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
-          </div>
-
-          <div style={{...styles.reportRow(), color: '#ef4444', marginTop: '10px'}}>
-            <span>(-) Gastos Operativos</span>
-            <span>(S/ {expensesTotal.toLocaleString('es-PE', {minimumFractionDigits: 2})})</span>
-          </div>
-          
-          {/* DESGLOSE DE GASTOS */}
-          {expensesTotal > 0 && (
-            <div style={{background: '#f1f5f9', padding: '10px', borderRadius: '5px', marginTop: '5px', fontSize: '0.85rem'}}>
-                <div style={{fontWeight: 'bold', color: '#475569', marginBottom: '5px'}}>Detalle de Gastos:</div>
-                {Object.keys(expenseBreakdown).sort((a,b) => expenseBreakdown[b] - expenseBreakdown[a]).map(type => (
-                    <div key={type} style={{display: 'flex', justifyContent: 'space-between', color: '#64748b'}}>
-                        <span>• {type}</span>
-                        <span>S/ {expenseBreakdown[type].toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
-                    </div>
-                ))}
+      <div style={{display: 'flex', gap: '20px', flexDirection: 'column'}}>
+        {/* Usamos flexWrap: 'wrap' para que no dependa de window.innerWidth */}
+        <div style={{display: 'flex', gap: '20px', flexWrap: 'wrap'}}>
+            
+            {/* 3. ESTADO DE RESULTADOS (Izquierda) */}
+            <div style={{...styles.statCard, flex: 1, backgroundColor: 'white', color: '#1e293b', minWidth: '300px'}}>
+            <h2 style={{textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '10px'}}>ESTADO DE RESULTADOS</h2>
+            <p style={{textAlign: 'center', color: '#64748b', fontSize: '0.9rem', marginBottom: '20px'}}>
+                Al {new Date(reportYear, reportMonth, 0).getDate()} de {["","Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][reportMonth]} del {reportYear}
+            </p>
+            
+            <div style={styles.reportRow(true)}>
+                <span>(+) VENTAS NETAS</span>
+                <span>S/ {incomeTotal.toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
             </div>
-          )}
-
-          <div style={{...styles.reportRow(true, true), marginTop: '20px', fontSize: '1.3rem', borderBottom: '4px double #000'}}>
-            <span>(=) UTILIDAD NETA</span>
-            <span style={{color: netProfit >= 0 ? '#16a34a' : '#ef4444'}}>S/ {netProfit.toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
-          </div>
-        </div>
-
-        {/* 4. BALANCE / SITUACIÓN (Derecha) */}
-        <div style={{...styles.statCard, flex: 1}}>
-          <h3 style={{color: '#fb923c'}}>📊 Balance General Simplificado</h3>
-          
-          <div style={{marginTop: '20px'}}>
-            <div style={styles.label}>ACTIVO CORRIENTE (Realizable)</div>
-            <div style={{fontSize: '2rem', fontWeight: 'bold', color: '#60a5fa'}}>
-              S/ {inventoryValue.toLocaleString('es-PE', {minimumFractionDigits: 2})}
+            <div style={{...styles.reportRow(), color: '#ef4444'}}>
+                <span>(-) Costo de Ventas</span>
+                <span>(S/ {cogsTotal.toLocaleString('es-PE', {minimumFractionDigits: 2})})</span>
             </div>
-            <p style={{fontSize: '0.8rem', color: '#94a3b8'}}>Valor total del Inventario actual (al costo).</p>
-          </div>
+            
+            <div style={styles.reportRow(true, true)}>
+                <span>(=) UTILIDAD BRUTA</span>
+                <span style={{color: grossProfit >= 0 ? '#16a34a' : '#ef4444'}}>S/ {grossProfit.toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
+            </div>
 
-          <div style={{marginTop: '30px', borderTop: '1px solid #475569', paddingTop: '10px'}}>
-             <div style={styles.label}>RESULTADO DEL EJERCICIO</div>
-             <div style={{fontSize: '2rem', fontWeight: 'bold', color: netProfit >= 0 ? '#4ade80' : '#f87171'}}>
-               S/ {netProfit.toLocaleString('es-PE', {minimumFractionDigits: 2})}
-             </div>
-             <p style={{fontSize: '0.8rem', color: '#94a3b8'}}>Dinero generado (o perdido) en este periodo.</p>
-          </div>
+            <div style={{...styles.reportRow(), color: '#ef4444', marginTop: '10px'}}>
+                <span>(-) Gastos Operativos</span>
+                <span>(S/ {expensesTotal.toLocaleString('es-PE', {minimumFractionDigits: 2})})</span>
+            </div>
+            
+            {/* DESGLOSE DE GASTOS */}
+            {expensesTotal > 0 && (
+                <div style={{background: '#f1f5f9', padding: '10px', borderRadius: '5px', marginTop: '5px', fontSize: '0.85rem'}}>
+                    <div style={{fontWeight: 'bold', color: '#475569', marginBottom: '5px'}}>Detalle de Gastos:</div>
+                    {Object.keys(expenseBreakdown).sort((a,b) => expenseBreakdown[b] - expenseBreakdown[a]).map(type => (
+                        <div key={type} style={{display: 'flex', justifyContent: 'space-between', color: '#64748b'}}>
+                            <span>• {type}</span>
+                            <span>S/ {expenseBreakdown[type].toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div style={{...styles.reportRow(true, true), marginTop: '20px', fontSize: '1.3rem', borderBottom: '4px double #000'}}>
+                <span>(=) UTILIDAD NETA</span>
+                <span style={{color: netProfit >= 0 ? '#16a34a' : '#ef4444'}}>S/ {netProfit.toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
+            </div>
+            </div>
+
+            {/* 4. BALANCE / SITUACIÓN (Derecha) */}
+            <div style={{...styles.statCard, flex: 1, minWidth: '300px'}}>
+            <h3 style={{color: '#fb923c'}}>📊 Balance General Simplificado</h3>
+            
+            <div style={{marginTop: '20px'}}>
+                <div style={styles.label}>ACTIVO CORRIENTE (Realizable)</div>
+                <div style={{fontSize: '2rem', fontWeight: 'bold', color: '#60a5fa'}}>
+                S/ {inventoryValue.toLocaleString('es-PE', {minimumFractionDigits: 2})}
+                </div>
+                <p style={{fontSize: '0.8rem', color: '#94a3b8'}}>Valor total del Inventario actual (al costo).</p>
+            </div>
+
+            <div style={{marginTop: '30px', borderTop: '1px solid #475569', paddingTop: '10px'}}>
+                <div style={styles.label}>RESULTADO DEL EJERCICIO</div>
+                <div style={{fontSize: '2rem', fontWeight: 'bold', color: netProfit >= 0 ? '#4ade80' : '#f87171'}}>
+                S/ {netProfit.toLocaleString('es-PE', {minimumFractionDigits: 2})}
+                </div>
+                <p style={{fontSize: '0.8rem', color: '#94a3b8'}}>Dinero generado (o perdido) en este periodo.</p>
+            </div>
+            </div>
         </div>
       </div>
     </div>
   );
 
   const renderInventory = () => (
-    <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
-      <div style={{...styles.card, flex: 1}}>
+    <div style={{display: 'flex', gap: '20px', flexWrap: 'wrap'}}>
+      <div style={{...styles.card, flex: 1, minWidth: '300px'}}>
         <h3>{newProduct.id ? 'Editar Producto' : 'Agregar Producto'}</h3>
         <div style={styles.inputGroup}><label style={styles.label}>Fecha Ingreso</label><input type="date" style={styles.input} value={newProduct.date} onChange={(e:any) => setNewProduct({...newProduct, date: e.target.value})} /></div>
         <div style={styles.inputGroup}>
@@ -629,7 +627,7 @@ export default function App() {
         <button style={loading ? styles.btnLoading : (newProduct.id ? styles.btnWarning : styles.btnPrimary)} onClick={addProduct} disabled={loading}>{loading ? 'Procesando...' : (newProduct.id ? 'Actualizar Producto' : 'Guardar Producto')}</button>
         {newProduct.id && <button style={{...styles.btnDelete, marginTop: 10, width: '100%'}} onClick={() => setNewProduct({ id: null, date: getToday(), name: '', sku: '', category: '', cost: '', stock: '', currency: 'PEN', description: '', notes: '', size: '', color: '', model: '', image: '', imageBase64: '', store: '' })}>Cancelar Edición</button>}
       </div>
-      <div style={{...styles.card, flex: 2, overflowX: 'auto'}}>
+      <div style={{...styles.card, flex: 2, overflowX: 'auto', minWidth: '300px'}}>
         <h3>Inventario Reciente</h3>
         <table style={styles.table}><thead><tr><th>Foto</th><th>SKU</th><th>Prod</th><th>Tienda</th><th>Stock</th></tr></thead>
         <tbody>{products.slice(-10).reverse().map(p => (
@@ -642,9 +640,121 @@ export default function App() {
     </div>
   );
 
+  const renderSales = () => (
+    <div style={{display: 'flex', gap: '20px', flexWrap: 'wrap'}}>
+      <div style={{...styles.card, flex: 1.2, minWidth: '300px'}}>
+        <h3>Nueva Venta</h3>
+        <div style={styles.inputGroup}><label style={styles.label}>Fecha Venta</label><input type="date" style={styles.input} value={newSale.date} onChange={(e:any) => setNewSale({...newSale, date: e.target.value})} /></div>
+        <div style={styles.sectionTitle}>1. Producto</div>
+        <div style={styles.inputGroup}><label style={styles.label}>SKU (Escanear)</label><input style={styles.input} value={newSale.sku} onChange={handleSkuChange} autoFocus placeholder="Escanea aquí..." />
+        {newSale.sku && foundProduct ? <div style={styles.productInfo}>✅ Producto encontrado</div> : null}</div>
+        
+        <div style={styles.inputGroup}><label style={styles.label}>Nombre del Producto</label><input style={styles.inputDisabled} value={foundProduct ? foundProduct.name : ''} readOnly placeholder="Se llena automáticamente al ingresar SKU" /></div>
+
+        <div style={styles.grid}>
+          <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Talla</label><input style={styles.input} value={newSale.size} onChange={(e:any) => setNewSale({...newSale, size: e.target.value})} /></div>
+          <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Color</label><input style={styles.input} value={newSale.color} onChange={(e:any) => setNewSale({...newSale, color: e.target.value})} /></div>
+        </div>
+        <div style={styles.grid}>
+            <div style={{...styles.inputGroup, flex: 2}}><label style={styles.label}>Boleta Nº</label><input style={styles.input} value={newSale.ticketNo} onChange={(e:any) => setNewSale({...newSale, ticketNo: e.target.value})} /></div>
+            <div style={{...styles.inputGroup, flex: 2}}>
+                <label style={styles.label}>Precio</label>
+                <div style={styles.inputWrapper}>
+                    <input type="number" style={styles.input} value={newSale.price} onChange={(e:any) => setNewSale({...newSale, price: e.target.value})} />
+                    <select style={styles.selectCurrency} value={newSale.currency} onChange={(e:any) => setNewSale({...newSale, currency: e.target.value})}><option value="PEN">S/</option><option value="USD">$</option></select>
+                </div>
+            </div>
+        </div>
+        <div style={styles.sectionTitle}>2. Cliente</div>
+        <div style={styles.inputGroup}><label style={styles.label}>Nombre Completo</label><input style={styles.input} value={newSale.customerName} onChange={(e:any) => setNewSale({...newSale, customerName: e.target.value})} /></div>
+        <div style={styles.grid}>
+            <div style={{...styles.inputGroup, flex: 1}}>
+                <label style={styles.label}>Doc.</label>
+                <select style={styles.select} value={newSale.docType} onChange={(e:any) => setNewSale({...newSale, docType: e.target.value})}>
+                    <option>DNI</option><option>CE</option><option>Pasaporte</option><option>Otro</option>
+                </select>
+            </div>
+            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Número</label><input style={styles.input} value={newSale.docNum} onChange={(e:any) => setNewSale({...newSale, docNum: e.target.value})} /></div>
+        </div>
+        <div style={styles.grid}>
+            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Teléfono</label><input style={styles.input} value={newSale.phone} onChange={(e:any) => setNewSale({...newSale, phone: e.target.value})} /></div>
+            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Email</label><input style={styles.input} type="email" value={newSale.email} onChange={(e:any) => setNewSale({...newSale, email: e.target.value})} /></div>
+        </div>
+
+        <div style={styles.sectionTitle}>3. Envío y Orden</div>
+        
+        <div style={styles.inputGroup}><label style={styles.label}>Compra en conjunto - N° de boleta</label><input style={styles.input} value={newSale.batchId} onChange={(e:any) => setNewSale({...newSale, batchId: e.target.value})} placeholder="Ej: Lote #54" /></div>
+        
+        <div style={styles.inputGroup}>
+            <label style={styles.label}>¿Quién Recibe?</label>
+            <select style={styles.select} value={newSale.receiverType} onChange={(e:any) => setNewSale({...newSale, receiverType: e.target.value})}>
+                <option>Yo</option><option>Otra Persona</option>
+            </select>
+        </div>
+
+        {newSale.receiverType === 'Otra Persona' && (
+            <div style={{background: '#334155', padding: 10, borderRadius: 5, marginBottom: 15}}>
+                <div style={styles.inputGroup}><label style={styles.label}>Nombre Receptor</label><input style={styles.input} value={newSale.receiverName} onChange={(e:any) => setNewSale({...newSale, receiverName: e.target.value})} /></div>
+                <div style={styles.grid}>
+                    <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>DNI Rec.</label><input style={styles.input} value={newSale.receiverDoc} onChange={(e:any) => setNewSale({...newSale, receiverDoc: e.target.value})} /></div>
+                    <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Tel Rec.</label><input style={styles.input} value={newSale.receiverPhone} onChange={(e:any) => setNewSale({...newSale, receiverPhone: e.target.value})} /></div>
+                </div>
+            </div>
+        )}
+
+        <div style={{background: '#334155', padding: 10, borderRadius: 5, marginBottom: 15}}>
+            <label style={{...styles.label, color: '#60a5fa', fontWeight: 'bold'}}>Ubicación de Envío</label>
+            <div style={styles.grid}>
+                <div style={{...styles.inputGroup, flex: 1}}>
+                    <label style={styles.label}>Departamento</label>
+                    <select style={styles.select} value={newSale.department} onChange={handleDepartmentChange}>
+                        <option value="">Seleccione...</option>
+                        {Object.keys(peruLocations).map(dept => <option key={dept} value={dept}>{dept}</option>)}
+                    </select>
+                </div>
+                <div style={{...styles.inputGroup, flex: 1}}>
+                    <label style={styles.label}>Provincia</label>
+                    <select style={styles.select} value={newSale.province} onChange={handleProvinceChange} disabled={!newSale.department}>
+                        <option value="">Seleccione...</option>
+                        {getProvinces().map((prov: string) => <option key={prov} value={prov}>{prov}</option>)}
+                    </select>
+                </div>
+                <div style={{...styles.inputGroup, flex: 1}}>
+                    <label style={styles.label}>Distrito</label>
+                    <select style={styles.select} value={newSale.district} onChange={(e:any) => setNewSale({...newSale, district: e.target.value})} disabled={!newSale.province}>
+                        <option value="">Seleccione...</option>
+                        {getDistricts().map((dist: string) => <option key={dist} value={dist}>{dist}</option>)}
+                    </select>
+                </div>
+            </div>
+            <div style={styles.inputGroup}><label style={styles.label}>Dirección Exacta</label><input style={styles.input} value={newSale.address} onChange={(e:any) => setNewSale({...newSale, address: e.target.value})} placeholder="Av. Principal 123..." /></div>
+            
+            <div style={styles.inputGroup}><label style={styles.label}>Referencia</label><input style={styles.input} value={newSale.reference} onChange={(e:any) => setNewSale({...newSale, reference: e.target.value})} placeholder="Ej: Frente al parque, puerta azul..." /></div>
+        </div>
+
+        <div style={styles.inputGroup}><label style={styles.label}>Costo Envío (S/)</label><input type="number" style={styles.input} value={newSale.shippingCost} onChange={(e:any) => setNewSale({...newSale, shippingCost: e.target.value})} placeholder="0.00" /></div>
+        
+        <button style={loading ? styles.btnLoading : styles.btnPrimary} onClick={addSale} disabled={loading}>{loading ? 'Registrando...' : 'Confirmar Venta'}</button>
+      </div>
+      <div style={{...styles.card, flex: 1.8, overflowX: 'auto', minWidth: '300px'}}>
+        <h3>Últimas Ventas</h3>
+        <table style={styles.table}><thead><tr><th>Fecha</th><th>Boleta</th><th>Prod</th><th>Cliente</th><th>Total</th></tr></thead>
+        <tbody>{sales.slice(-10).reverse().map(s => (
+            <tr key={s.id}>
+                <td style={styles.td}>{formatDisplayDate(s.date)}</td>
+                <td style={styles.td}>{s.ticketNo || '-'}</td>
+                <td style={styles.td}>{s.productName}</td>
+                <td style={styles.td}>{s.customerName}</td>
+                <td style={styles.td}>{s.currency === 'USD' ? '$' : 'S/'} {parseFloat(s.total).toFixed(2)}</td>
+            </tr>
+        ))}</tbody></table>
+      </div>
+    </div>
+  );
+
   const renderExpenses = () => (
-    <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
-      <div style={{...styles.card, flex: 1}}>
+    <div style={{display: 'flex', gap: '20px', flexWrap: 'wrap'}}>
+      <div style={{...styles.card, flex: 1, minWidth: '300px'}}>
         <h3>Nuevo Gasto</h3>
         <div style={styles.inputGroup}><label style={styles.label}>Fecha</label><input type="date" style={styles.input} value={newExpense.date} onChange={(e:any) => setNewExpense({...newExpense, date: e.target.value})} /></div>
         <div style={styles.inputGroup}><label style={styles.label}>Tipo</label>
@@ -675,7 +785,7 @@ export default function App() {
         </div>
         <button style={loading ? styles.btnLoading : styles.btnPrimary} onClick={addExpense} disabled={loading}>{loading ? 'Guardando...' : 'Guardar Gasto'}</button>
       </div>
-      <div style={{...styles.card, flex: 2, overflowX: 'auto'}}>
+      <div style={{...styles.card, flex: 2, overflowX: 'auto', minWidth: '300px'}}>
         <h3>Gastos Recientes</h3>
         <table style={styles.table}><thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Monto</th></tr></thead><tbody>{expenses.slice(-10).reverse().map(e => (<tr key={e.id}><td style={styles.td}>{formatDisplayDate(e.date)}</td><td style={styles.td}>{e.type}</td><td style={styles.td}>{e.desc}</td><td style={styles.td}>{e.currency === 'USD' ? '$' : 'S/'} {parseFloat(e.amount).toFixed(2)}</td></tr>))}</tbody></table>
       </div>
