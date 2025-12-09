@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// --- TU NUEVA URL (ACTUALIZADA 12:27 AM) ---
+// --- CONFIGURACIÓN DE SEGURIDAD ---
+const APP_PASSWORD = "Meraly123"; // <--- CONTRASEÑA ACTUALIZADA
+
+// --- TU NUEVA URL ---
 const API_URL = "https://script.google.com/macros/s/AKfycbw6vYJgWbf3mCLkc3Xki0mgCE6ZsafrgDWCWKZ82Jbq5KDbJDRQr0TgZCJurHDqA3quZg/exec";
 
 // --- LOGO ---
@@ -35,12 +38,14 @@ const formatDisplayDate = (isoDate: string) => {
   return d ? `${d}/${m}/${y}` : isoDate;
 };
 
-// --- SAFE STRING HELPER (Evita pantalla blanca si SKU es número) ---
+// --- SAFE STRING HELPER ---
 const safeString = (val: any) => String(val || '').toLowerCase();
 
 // --- ESTILOS ---
 const styles = {
   container: { backgroundColor: '#0f172a', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif', padding: '20px' },
+  loginContainer: { display: 'flex', flexDirection: 'column' as 'column', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#0f172a', color: 'white', fontFamily: 'sans-serif' },
+  loginBox: { backgroundColor: '#1e293b', padding: '40px', borderRadius: '15px', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)', width: '100%', maxWidth: '400px', textAlign: 'center' as 'center' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '1px solid #334155', paddingBottom: '20px', flexWrap: 'wrap', gap: '20px' },
   logoContainer: { display: 'flex', alignItems: 'center' },
   logoImg: { height: '80px', objectFit: 'contain' },
@@ -77,6 +82,12 @@ const styles = {
 };
 
 export default function App() {
+  // --- ESTADO DE AUTENTICACIÓN ---
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState(false);
+
+  // --- ESTADOS DE LA APP ---
   const [view, setView] = useState('dashboard');
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
@@ -114,15 +125,27 @@ export default function App() {
   });
 
   const fileInputRef = useRef<any>(null);
-  
-  // Buscador seguro
   const foundProduct = products.find(p => safeString(p.sku) === safeString(newSale.sku));
 
   useEffect(() => {
-    fetch(API_URL).then(res => res.json()).then(data => {
-        setProducts(data.products || []); setSales(data.sales || []); setExpenses(data.expenses || []); setInitialLoad(false);
-      }).catch(err => { console.error(err); setInitialLoad(false); });
-  }, []);
+    // Solo carga datos si está autenticado para ahorrar recursos, o carga en background
+    if (isAuthenticated) {
+        fetch(API_URL).then(res => res.json()).then(data => {
+            setProducts(data.products || []); setSales(data.sales || []); setExpenses(data.expenses || []); setInitialLoad(false);
+        }).catch(err => { console.error(err); setInitialLoad(false); });
+    }
+  }, [isAuthenticated]);
+
+  const handleLogin = (e: any) => {
+    e.preventDefault();
+    if (passwordInput === APP_PASSWORD) {
+        setIsAuthenticated(true);
+        setLoginError(false);
+    } else {
+        setLoginError(true);
+        setPasswordInput('');
+    }
+  };
 
   const sendToSheet = async (payload: any) => {
     setLoading(true);
@@ -316,6 +339,34 @@ export default function App() {
   const grossProfit = totalSalesPEN - totalCOGSPEN;
   const netProfit = grossProfit - totalExpensesPEN;
 
+  // --- RENDER LOGIN SCREEN ---
+  if (!isAuthenticated) {
+    return (
+        <div style={styles.loginContainer}>
+            <div style={styles.loginBox}>
+                <div style={{marginBottom: 20}}>
+                     {!logoError ? ( <img src={LOGO_URL} alt="Logo" style={{height: 100}} onError={() => setLogoError(true)} /> ) : ( <h1 style={{color: '#dc2626'}}>VERIDI STORE</h1> )}
+                </div>
+                <h2 style={{marginBottom: 10}}>Acceso Restringido</h2>
+                <p style={{color: '#94a3b8', marginBottom: 20}}>Ingresa la contraseña maestra para continuar.</p>
+                <form onSubmit={handleLogin}>
+                    <input 
+                        type="password" 
+                        style={{...styles.input, textAlign: 'center', fontSize: '1.2rem', marginBottom: 15}} 
+                        placeholder="Contraseña..." 
+                        value={passwordInput} 
+                        onChange={(e) => setPasswordInput(e.target.value)} 
+                        autoFocus
+                    />
+                    {loginError && <p style={{color: '#ef4444', marginBottom: 15}}>Contraseña incorrecta</p>}
+                    <button type="submit" style={styles.btnPrimary}>INGRESAR AL SISTEMA</button>
+                </form>
+            </div>
+        </div>
+    );
+  }
+
+  // --- RENDER MAIN APP ---
   if (initialLoad) return <div style={styles.container}><h2 style={{textAlign:'center', marginTop:'20%'}}>Cargando Veridi System...</h2></div>;
 
   const renderInventory = () => (
