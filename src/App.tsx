@@ -3,8 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 // --- CONFIGURACIÓN DE SEGURIDAD ---
 const APP_PASSWORD = "Meraly123"; 
 
-// --- TU NUEVA URL (ACTUALIZADA EL 9 DIC) ---
-const API_URL = "https://script.google.com/macros/s/AKfycbyp_-u45KlaGA8kj9ht4b87zAT-oQKK-qJoLEViOHzwxVPiXPOk07kWfw0M4B6McsG46w/exec";
+// --- TU NUEVA URL (ACTUALIZADA EL 9 DIC - PERMISOS DRIVE) ---
+const API_URL = "https://script.google.com/macros/s/AKfycbyTtKl1Q73tn29ySdLd4UObvbHQXCVuaVB1DvSZwZUVAOStlOYnktg3MiUhN6zQp2itCA/exec";
 
 // --- LOGO ---
 const LOGO_URL = "https://lh3.googleusercontent.com/d/1obDjT8NmSP-Z9L37P7fR5nPVBEdzL-r1";
