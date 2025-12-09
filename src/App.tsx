@@ -7,9 +7,7 @@ const APP_PASSWORD = "Meraly123";
 const API_URL = "https://script.google.com/macros/s/AKfycbyTtKl1Q73tn29ySdLd4UObvbHQXCVuaVB1DvSZwZUVAOStlOYnktg3MiUhN6zQp2itCA/exec";
 
 // --- APIs TIPO DE CAMBIO (Principal y Respaldo) ---
-// Usamos un proxy que consulta a SUNAT. Le agregamos fecha dinámica.
 const SUNAT_API_BASE = "https://api.apis.net.pe/v1/tipo-cambio-sunat";
-// API de respaldo (Mercado internacional) si SUNAT falla
 const FALLBACK_API = "https://api.exchangerate-api.com/v4/latest/USD";
 
 // --- LOGO ---
@@ -66,7 +64,7 @@ const styles = {
     padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', transition: '0.3s', whiteSpace: 'nowrap'
   }),
   card: { backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', marginBottom: '20px' },
-  reportCard: { backgroundColor: '#fff', color: '#1e293b', padding: '20px', borderRadius: '5px', marginBottom: '20px' }, 
+  kpiCard: { backgroundColor: '#334155', padding: '15px', borderRadius: '8px', flex: 1, minWidth: '280px', borderLeft: '4px solid #3b82f6' },
   inputGroup: { marginBottom: '15px' },
   label: { display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9rem' },
   inputWrapper: { display: 'flex', gap: '10px' },
@@ -78,7 +76,6 @@ const styles = {
   btnWarning: { width: '100%', padding: '12px', background: '#f59e0b', color: 'black', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' },
   btnDelete: { padding: '5px 10px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '0.8rem' },
   table: { width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '0.9rem' },
-  financialTable: { width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '1rem', color: '#000' },
   th: { textAlign: 'left', padding: '10px', borderBottom: '1px solid #334155', color: '#94a3b8' },
   td: { padding: '10px', borderBottom: '1px solid #334155' },
   statCard: { flex: 1, backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', border: '1px solid #334155', minWidth: '200px' },
@@ -96,12 +93,10 @@ const styles = {
 };
 
 export default function App() {
-  // --- ESTADO DE AUTENTICACIÓN ---
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState(false);
 
-  // --- ESTADOS DE LA APP ---
   const [view, setView] = useState('inventory');
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
@@ -109,7 +104,7 @@ export default function App() {
   const [updatingRate, setUpdatingRate] = useState(false);
   const [logoError, setLogoError] = useState(false);
 
-  // --- ESTADOS FINANCIEROS (Filtros) ---
+  // Filtros Reporte
   const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1);
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
 
@@ -117,7 +112,7 @@ export default function App() {
   const [sales, setSales] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   
-  // Filtros de Búsqueda
+  // Filtros Búsqueda
   const [globalSearch, setGlobalSearch] = useState('');
   const [searchTab, setSearchTab] = useState('inventory');
   const [voidSearchTerm, setVoidSearchTerm] = useState('');
@@ -146,35 +141,26 @@ export default function App() {
   const fileInputRef = useRef<any>(null);
   const foundProduct = products.find(p => safeString(p.sku) === safeString(newSale.sku));
 
-  // Función para obtener Tipo de Cambio
   const fetchExchangeRate = async () => {
     setUpdatingRate(true);
     try {
-        // Intento 1: API Proxy de SUNAT (con fecha para evitar caché)
-        // Nota: A veces SUNAT demora en publicar el del día, si falla, usamos el de ayer o el internacional
         const response = await fetch(`${SUNAT_API_BASE}?_=${Date.now()}`); 
         const data = await response.json();
-        
         if (data && data.venta) {
             setExchangeRate(data.venta);
-            console.log("TC SUNAT obtenido:", data.venta);
         } else {
             throw new Error("Formato incorrecto o sin datos SUNAT");
         }
     } catch (err) {
-        console.warn("Fallo API SUNAT principal, intentando respaldo...", err);
         try {
-            // Intento 2: API Internacional (Referencial)
             const resFallback = await fetch(FALLBACK_API);
             const dataFallback = await resFallback.json();
             if (dataFallback && dataFallback.rates && dataFallback.rates.PEN) {
                 setExchangeRate(dataFallback.rates.PEN);
-                console.log("TC Internacional obtenido:", dataFallback.rates.PEN);
                 alert("⚠️ Ojo: No se pudo conectar con SUNAT. Se usó el T.C. internacional referencial.");
             }
         } catch (err2) {
             console.error("Error total obteniendo TC", err2);
-            // No hacemos nada, se queda el valor manual por defecto (3.75)
         }
     } finally {
         setUpdatingRate(false);
@@ -182,10 +168,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    // 1. Obtener Tipo de Cambio al iniciar
     fetchExchangeRate();
-
-    // 2. Obtener Datos
     if (isAuthenticated) {
         fetch(API_URL).then(res => res.json()).then(data => {
             setProducts(data.products || []); setSales(data.sales || []); setExpenses(data.expenses || []); setInitialLoad(false);
@@ -198,7 +181,6 @@ export default function App() {
     if (passwordInput === APP_PASSWORD) {
         setIsAuthenticated(true);
         setLoginError(false);
-        // Recargar datos al loguearse por si acaso
         fetchExchangeRate(); 
     } else {
         setLoginError(true);
@@ -220,6 +202,7 @@ export default function App() {
     return currency === 'USD' ? val * rate : val;
   };
 
+  // Filtros por periodo
   const filteredSales = sales.filter(s => {
     const [y, m] = s.date.split('-'); 
     return parseInt(y) === reportYear && parseInt(m) === reportMonth;
@@ -230,19 +213,38 @@ export default function App() {
     return parseInt(y) === reportYear && parseInt(m) === reportMonth;
   });
 
+  // Datos Base
   const incomeTotal = filteredSales.reduce((acc, s) => acc + toPEN(s.total, s.currency, s.exchangeRate), 0);
-  
   const cogsTotal = filteredSales.reduce((acc, s) => {
       const p = products.find(prod => safeString(prod.sku) === safeString(s.sku));
       const cost = p ? toPEN(p.cost, p.currency, p.exchangeRate) : 0; 
       return acc + (cost * s.qty);
   }, 0);
-
   const grossProfit = incomeTotal - cogsTotal;
   const expensesTotal = filteredExpenses.reduce((acc, e) => acc + toPEN(e.amount, e.currency, e.exchangeRate), 0);
   const netProfit = grossProfit - expensesTotal;
   const inventoryValue = products.reduce((acc, p) => acc + (toPEN(p.cost, p.currency, exchangeRate) * parseInt(p.stock)), 0);
+
+  // --- INDICADORES PLAN DE NEGOCIOS ---
+  // 1. Margen Bruto % (Meta 30%)
+  const grossMarginPercent = incomeTotal > 0 ? (grossProfit / incomeTotal) * 100 : 0;
   
+  // 2. Ticket Promedio (AOV) (Meta $100-$150)
+  const totalOrders = filteredSales.length;
+  const aovPEN = totalOrders > 0 ? incomeTotal / totalOrders : 0;
+  const aovUSD = aovPEN / exchangeRate; // Para comparar con la meta en USD
+
+  // 3. CAC (Costo Adquisición Clientes) (Meta < 25% AOV)
+  // Filtramos gastos de Publicidad
+  const marketingExpenses = filteredExpenses.filter(e => safeString(e.type).includes('publicidad') || safeString(e.type).includes('marketing')).reduce((acc, e) => acc + toPEN(e.amount, e.currency, e.exchangeRate), 0);
+  // Contamos clientes únicos en el periodo (por DNI)
+  const uniqueCustomers = new Set(filteredSales.map(s => s.docNum)).size;
+  const cacPEN = uniqueCustomers > 0 ? marketingExpenses / uniqueCustomers : 0;
+  
+  // Meta CAC: 25% del AOV actual
+  const targetCacMax = aovPEN * 0.25;
+
+  // -- MANEJADORES FORMULARIOS --
   const handleImageUpload = (e: any) => {
     const file = e.target.files[0];
     if (file) {
@@ -443,9 +445,9 @@ export default function App() {
     );
   }
 
-  // --- RENDER MAIN APP ---
   if (initialLoad) return <div style={styles.container}><h2 style={{textAlign:'center', marginTop:'20%'}}>Cargando Veridi System...</h2></div>;
 
+  // --- DASHBOARD RENDER ---
   const renderDashboard = () => (
     <div style={{display: 'flex', flexDirection: 'column', gap: '20px'}}>
       
@@ -470,9 +472,55 @@ export default function App() {
         </div>
       </div>
 
+      {/* 2. NUEVA SECCIÓN: KPIs PLAN DE NEGOCIOS */}
+      <div style={{...styles.card, border: '1px solid #60a5fa'}}>
+        <h3 style={{color: '#fbbf24', borderBottom: '1px solid #475569', paddingBottom: '10px', marginBottom: '20px'}}>
+            🎯 KPIs Estratégicos (Plan de Negocios)
+        </h3>
+        <div style={{display: 'flex', gap: '20px', flexWrap: 'wrap'}}>
+            
+            {/* KPI 1: Margen Bruto */}
+            <div style={styles.kpiCard}>
+                <div style={styles.label}>1. Margen Bruto</div>
+                <div style={{fontSize: '2rem', fontWeight: 'bold', color: grossMarginPercent >= 30 ? '#4ade80' : '#f87171'}}>
+                    {grossMarginPercent.toFixed(1)}%
+                </div>
+                <div style={{fontSize: '0.8rem', color: '#94a3b8', marginTop: '5px'}}>
+                    Meta: Mínimo 30% <br/>
+                    {grossMarginPercent >= 30 ? '✅ Objetivo Cumplido' : '⚠️ Ajustar Precios/Costos'}
+                </div>
+            </div>
+
+            {/* KPI 2: Ticket Promedio (AOV) */}
+            <div style={styles.kpiCard}>
+                <div style={styles.label}>2. Ticket Promedio (AOV)</div>
+                <div style={{fontSize: '2rem', fontWeight: 'bold', color: aovUSD >= 100 ? '#4ade80' : '#fbbf24'}}>
+                    S/ {aovPEN.toFixed(0)} <span style={{fontSize: '1rem', color:'#94a3b8'}}>($ {aovUSD.toFixed(0)})</span>
+                </div>
+                <div style={{fontSize: '0.8rem', color: '#94a3b8', marginTop: '5px'}}>
+                    Meta: $100 - $150 (S/ {(100*exchangeRate).toFixed(0)} - S/ {(150*exchangeRate).toFixed(0)}) <br/>
+                    {aovUSD >= 100 ? '✅ Objetivo Cumplido' : '⚠️ Fomentar Packs/Combos'}
+                </div>
+            </div>
+
+            {/* KPI 3: CAC vs AOV */}
+            <div style={styles.kpiCard}>
+                <div style={styles.label}>3. Costo Adquisición (CAC)</div>
+                <div style={{fontSize: '2rem', fontWeight: 'bold', color: (cacPEN <= targetCacMax && cacPEN > 0) ? '#4ade80' : (cacPEN === 0 ? '#94a3b8' : '#f87171')}}>
+                    S/ {cacPEN.toFixed(2)}
+                </div>
+                <div style={{fontSize: '0.8rem', color: '#94a3b8', marginTop: '5px'}}>
+                    Meta (25% AOV): Máx S/ {targetCacMax.toFixed(2)} <br/>
+                    {cacPEN === 0 ? 'ℹ️ Sin gastos de Publicidad' : (cacPEN <= targetCacMax ? '✅ Rentabilidad OK' : '⚠️ Optimizar Ads')}
+                </div>
+            </div>
+
+        </div>
+      </div>
+
       <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
         
-        {/* 2. ESTADO DE RESULTADOS (Izquierda) */}
+        {/* 3. ESTADO DE RESULTADOS (Izquierda) */}
         <div style={{...styles.statCard, flex: 1, backgroundColor: 'white', color: '#1e293b'}}>
           <h2 style={{textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '10px'}}>ESTADO DE RESULTADOS</h2>
           <p style={{textAlign: 'center', color: '#64748b', fontSize: '0.9rem', marginBottom: '20px'}}>
@@ -502,32 +550,27 @@ export default function App() {
             <span>(=) UTILIDAD NETA</span>
             <span style={{color: netProfit >= 0 ? '#16a34a' : '#ef4444'}}>S/ {netProfit.toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
           </div>
-
-          <div style={{marginTop: '20px', fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic'}}>
-            * Nota: El Costo de Ventas se calcula basado en el costo individual de cada producto vendido en este periodo.
-          </div>
         </div>
 
-        {/* 3. BALANCE / SITUACIÓN (Derecha) */}
+        {/* 4. BALANCE / SITUACIÓN (Derecha) */}
         <div style={{...styles.statCard, flex: 1}}>
-          <h3 style={{color: '#fb923c'}}>📊 Indicadores Financieros</h3>
+          <h3 style={{color: '#fb923c'}}>📊 Balance General Simplificado</h3>
           
           <div style={{marginTop: '20px'}}>
-            <div style={styles.label}>Valor de Inventario Actual (Activo)</div>
+            <div style={styles.label}>ACTIVO CORRIENTE (Realizable)</div>
             <div style={{fontSize: '2rem', fontWeight: 'bold', color: '#60a5fa'}}>
               S/ {inventoryValue.toLocaleString('es-PE', {minimumFractionDigits: 2})}
             </div>
-            <p style={{fontSize: '0.8rem', color: '#94a3b8'}}>Dinero invertido en productos en stock hoy.</p>
+            <p style={{fontSize: '0.8rem', color: '#94a3b8'}}>Valor total del Inventario actual (al costo).</p>
           </div>
 
-          <div style={{marginTop: '30px'}}>
-             <div style={styles.label}>Margen de Ganancia (Periodo)</div>
-             <div style={{fontSize: '2rem', fontWeight: 'bold', color: incomeTotal > 0 ? '#fbbf24' : '#94a3b8'}}>
-               {incomeTotal > 0 ? ((netProfit / incomeTotal) * 100).toFixed(1) : '0.0'}%
+          <div style={{marginTop: '30px', borderTop: '1px solid #475569', paddingTop: '10px'}}>
+             <div style={styles.label}>RESULTADO DEL EJERCICIO</div>
+             <div style={{fontSize: '2rem', fontWeight: 'bold', color: netProfit >= 0 ? '#4ade80' : '#f87171'}}>
+               S/ {netProfit.toLocaleString('es-PE', {minimumFractionDigits: 2})}
              </div>
-             <p style={{fontSize: '0.8rem', color: '#94a3b8'}}>Por cada S/ 100 que vendes, ganas S/ {incomeTotal > 0 ? ((netProfit / incomeTotal) * 100).toFixed(1) : '0'}.</p>
+             <p style={{fontSize: '0.8rem', color: '#94a3b8'}}>Dinero generado (o perdido) en este periodo.</p>
           </div>
-
         </div>
       </div>
     </div>
@@ -643,7 +686,6 @@ export default function App() {
             </div>
         )}
 
-        {/* UBICACION DETALLADA */}
         <div style={{background: '#334155', padding: 10, borderRadius: 5, marginBottom: 15}}>
             <label style={{...styles.label, color: '#60a5fa', fontWeight: 'bold'}}>Ubicación de Envío</label>
             <div style={styles.grid}>
@@ -752,10 +794,8 @@ export default function App() {
     </div>
   );
 
-  // --- NUEVA VISTA ADMIN DATOS ---
   const renderAdminVoid = () => (
       <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
-        {/* ELIMINAR PRODUCTOS */}
         <div style={{...styles.card, flex: 1}}>
             <h3 style={{color:'#fb923c'}}>🗑️ Eliminar Producto (Inventario)</h3>
             <p style={{fontSize:'0.8rem', color:'#94a3b8'}}>Cuidado: Esto borra el producto permanentemente.</p>
@@ -776,7 +816,6 @@ export default function App() {
             </div>
         </div>
 
-        {/* ELIMINAR GASTOS */}
         <div style={{...styles.card, flex: 1}}>
             <h3 style={{color:'#fb923c'}}>🗑️ Eliminar Gasto</h3>
             <p style={{fontSize:'0.8rem', color:'#94a3b8'}}>Borra el registro financiero.</p>
