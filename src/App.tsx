@@ -3,11 +3,14 @@ import React, { useState, useEffect, useRef } from 'react';
 // --- CONFIGURACIÓN DE SEGURIDAD ---
 const APP_PASSWORD = "Meraly123"; 
 
-// --- TU NUEVA URL (ACTUALIZADA EL 9 DIC - PERMISOS DRIVE) ---
+// --- TU URL DE GOOGLE SCRIPT ---
 const API_URL = "https://script.google.com/macros/s/AKfycbyTtKl1Q73tn29ySdLd4UObvbHQXCVuaVB1DvSZwZUVAOStlOYnktg3MiUhN6zQp2itCA/exec";
 
-// --- API TIPO DE CAMBIO SUNAT (Proxy gratuito) ---
-const SUNAT_API = "https://api.apis.net.pe/v1/tipo-cambio-sunat";
+// --- APIs TIPO DE CAMBIO (Principal y Respaldo) ---
+// Usamos un proxy que consulta a SUNAT. Le agregamos fecha dinámica.
+const SUNAT_API_BASE = "https://api.apis.net.pe/v1/tipo-cambio-sunat";
+// API de respaldo (Mercado internacional) si SUNAT falla
+const FALLBACK_API = "https://api.exchangerate-api.com/v4/latest/USD";
 
 // --- LOGO ---
 const LOGO_URL = "https://lh3.googleusercontent.com/d/1obDjT8NmSP-Z9L37P7fR5nPVBEdzL-r1";
@@ -56,13 +59,14 @@ const styles = {
   headerControls: { display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' },
   exchangeRateBox: { display: 'flex', alignItems: 'center', gap: '10px', background: '#1e293b', padding: '5px 15px', borderRadius: '20px', border: '1px solid #475569' },
   exchangeInput: { width: '80px', padding: '5px', borderRadius: '5px', border: 'none', background: '#0f172a', color: '#4ade80', textAlign: 'center' as 'center', fontWeight: 'bold' },
+  refreshBtn: { background: 'transparent', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '1.2rem', padding: '0 5px', display: 'flex', alignItems: 'center' },
   nav: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
   navBtn: (active: boolean) => ({
     background: active ? '#2563eb' : 'transparent', color: 'white', border: active ? 'none' : '1px solid #475569',
     padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', transition: '0.3s', whiteSpace: 'nowrap'
   }),
   card: { backgroundColor: '#1e293b', padding: '20px', borderRadius: '10px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', marginBottom: '20px' },
-  reportCard: { backgroundColor: '#fff', color: '#1e293b', padding: '20px', borderRadius: '5px', marginBottom: '20px' }, // Estilo papel
+  reportCard: { backgroundColor: '#fff', color: '#1e293b', padding: '20px', borderRadius: '5px', marginBottom: '20px' }, 
   inputGroup: { marginBottom: '15px' },
   label: { display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9rem' },
   inputWrapper: { display: 'flex', gap: '10px' },
@@ -83,7 +87,6 @@ const styles = {
   sectionTitle: { borderBottom: '1px solid #475569', paddingBottom: '5px', marginBottom: '15px', color: '#60a5fa', fontWeight: 'bold' },
   imagePreview: { width: '50px', height: '50px', objectFit: 'cover', borderRadius: '5px' },
   searchBar: { padding: '10px', borderRadius: '5px', border: '1px solid #475569', background: '#0f172a', color: 'white', marginBottom: '20px', width: '100%' },
-  // Report Styles
   reportRow: (isBold = false, isTotal = false) => ({
     display: 'flex', justifyContent: 'space-between', padding: '8px 0', 
     borderBottom: isTotal ? '2px solid #000' : '1px solid #e2e8f0',
@@ -99,14 +102,15 @@ export default function App() {
   const [loginError, setLoginError] = useState(false);
 
   // --- ESTADOS DE LA APP ---
-  const [view, setView] = useState('inventory'); // Cambié la vista inicial a Inventario ya que el Dashboard va al final
+  const [view, setView] = useState('inventory');
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
   const [exchangeRate, setExchangeRate] = useState<any>(3.75); 
+  const [updatingRate, setUpdatingRate] = useState(false);
   const [logoError, setLogoError] = useState(false);
 
   // --- ESTADOS FINANCIEROS (Filtros) ---
-  const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1); // 1-12
+  const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1);
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
 
   const [products, setProducts] = useState<any[]>([]);
@@ -142,16 +146,44 @@ export default function App() {
   const fileInputRef = useRef<any>(null);
   const foundProduct = products.find(p => safeString(p.sku) === safeString(newSale.sku));
 
-  useEffect(() => {
-    // 1. Obtener Tipo de Cambio SUNAT
-    fetch(SUNAT_API)
-      .then(res => res.json())
-      .then(data => {
-        if(data && data.venta) {
+  // Función para obtener Tipo de Cambio
+  const fetchExchangeRate = async () => {
+    setUpdatingRate(true);
+    try {
+        // Intento 1: API Proxy de SUNAT (con fecha para evitar caché)
+        // Nota: A veces SUNAT demora en publicar el del día, si falla, usamos el de ayer o el internacional
+        const response = await fetch(`${SUNAT_API_BASE}?_=${Date.now()}`); 
+        const data = await response.json();
+        
+        if (data && data.venta) {
             setExchangeRate(data.venta);
+            console.log("TC SUNAT obtenido:", data.venta);
+        } else {
+            throw new Error("Formato incorrecto o sin datos SUNAT");
         }
-      })
-      .catch(err => console.log("Error obteniendo TC SUNAT, usando valor manual."));
+    } catch (err) {
+        console.warn("Fallo API SUNAT principal, intentando respaldo...", err);
+        try {
+            // Intento 2: API Internacional (Referencial)
+            const resFallback = await fetch(FALLBACK_API);
+            const dataFallback = await resFallback.json();
+            if (dataFallback && dataFallback.rates && dataFallback.rates.PEN) {
+                setExchangeRate(dataFallback.rates.PEN);
+                console.log("TC Internacional obtenido:", dataFallback.rates.PEN);
+                alert("⚠️ Ojo: No se pudo conectar con SUNAT. Se usó el T.C. internacional referencial.");
+            }
+        } catch (err2) {
+            console.error("Error total obteniendo TC", err2);
+            // No hacemos nada, se queda el valor manual por defecto (3.75)
+        }
+    } finally {
+        setUpdatingRate(false);
+    }
+  };
+
+  useEffect(() => {
+    // 1. Obtener Tipo de Cambio al iniciar
+    fetchExchangeRate();
 
     // 2. Obtener Datos
     if (isAuthenticated) {
@@ -166,6 +198,8 @@ export default function App() {
     if (passwordInput === APP_PASSWORD) {
         setIsAuthenticated(true);
         setLoginError(false);
+        // Recargar datos al loguearse por si acaso
+        fetchExchangeRate(); 
     } else {
         setLoginError(true);
         setPasswordInput('');
@@ -186,10 +220,7 @@ export default function App() {
     return currency === 'USD' ? val * rate : val;
   };
 
-  // 1. Filtrar transacciones por Mes y Año seleccionado
   const filteredSales = sales.filter(s => {
-    const d = new Date(s.date);
-    // Ajuste de zona horaria simple: usar string split es más seguro para fechas YYYY-MM-DD
     const [y, m] = s.date.split('-'); 
     return parseInt(y) === reportYear && parseInt(m) === reportMonth;
   });
@@ -199,13 +230,10 @@ export default function App() {
     return parseInt(y) === reportYear && parseInt(m) === reportMonth;
   });
 
-  // 2. Cálculos para Estado de Resultados
   const incomeTotal = filteredSales.reduce((acc, s) => acc + toPEN(s.total, s.currency, s.exchangeRate), 0);
   
-  // Costo de Ventas (COGS): Buscar cuánto costó cada producto vendido en ese periodo
   const cogsTotal = filteredSales.reduce((acc, s) => {
       const p = products.find(prod => safeString(prod.sku) === safeString(s.sku));
-      // Si el producto ya no existe, usamos 0 (o un costo promedio si tuvieramos)
       const cost = p ? toPEN(p.cost, p.currency, p.exchangeRate) : 0; 
       return acc + (cost * s.qty);
   }, 0);
@@ -213,9 +241,6 @@ export default function App() {
   const grossProfit = incomeTotal - cogsTotal;
   const expensesTotal = filteredExpenses.reduce((acc, e) => acc + toPEN(e.amount, e.currency, e.exchangeRate), 0);
   const netProfit = grossProfit - expensesTotal;
-
-  // 3. Cálculos para Balance General (Simplificado)
-  // Valor del Inventario Actual (Activo Realizable)
   const inventoryValue = products.reduce((acc, p) => acc + (toPEN(p.cost, p.currency, exchangeRate) * parseInt(p.stock)), 0);
   
   const handleImageUpload = (e: any) => {
@@ -831,8 +856,11 @@ export default function App() {
         </div>
         <div style={styles.headerControls}>
           <div style={styles.exchangeRateBox}>
-            <span style={{color: '#94a3b8', fontSize: '0.9rem'}}>T.C. (SUNAT/Manual): $1 = S/</span>
+            <span style={{color: '#94a3b8', fontSize: '0.9rem'}}>T.C. (SUNAT/Intl): $1 = S/</span>
             <input type="number" step="0.01" style={styles.exchangeInput} value={exchangeRate} onChange={(e:any) => setExchangeRate(e.target.value)} />
+            <button style={styles.refreshBtn} onClick={fetchExchangeRate} title="Forzar Actualización" disabled={updatingRate}>
+                {updatingRate ? '...' : '🔄'}
+            </button>
           </div>
           <nav style={styles.nav}>
             <button style={styles.navBtn(view === 'inventory')} onClick={() => setView('inventory')}>Inventario</button>
@@ -841,7 +869,6 @@ export default function App() {
             <button style={styles.navBtn(view === 'search')} onClick={() => setView('search')}>🔍 Búsqueda</button>
             <button style={{...styles.navBtn(view === 'admin_void'), color:'#fb923c', borderColor:'#fb923c'}} onClick={() => setView('admin_void')}>Admin Datos</button>
             <button style={{...styles.navBtn(view === 'void'), color:'#f87171', borderColor:'#f87171'}} onClick={() => setView('void')}>Anular Ventas</button>
-            {/* MOVÍ EL DASHBOARD AL FINAL COMO PEDISTE */}
             <button style={{...styles.navBtn(view === 'dashboard'), border: '1px solid #4ade80', color: view === 'dashboard' ? 'black' : '#4ade80', background: view === 'dashboard' ? '#4ade80' : 'transparent'}} onClick={() => setView('dashboard')}>📊 Resumen Financiero</button>
           </nav>
         </div>
