@@ -349,32 +349,53 @@ export default function App() {
   };
 
   const voidSale = async (saleId: any, sku: string, qty: any) => {
-    if (!confirm("¿Seguro que deseas anular esta venta? El stock será devuelto.")) return;
+    // MODIFICADO: Ahora pide un motivo
+    const reason = prompt("⚠️ Vas a ANULAR esta venta y el stock retornará al inventario.\n\nEscribe el motivo de la anulación (Ej. 'Error de digitación', 'Cliente desistió'):");
+    if (reason === null) return; // Si cancela, no hace nada
+    
+    const reasonFinal = reason.trim() === "" ? "Sin motivo especificado" : reason;
+
     setLoading(true);
     const prevSales = [...sales]; const prevProducts = [...products];
     setSales(sales.filter(s => s.id !== saleId));
     setProducts(products.map(p => safeString(p.sku) === safeString(sku) ? { ...p, stock: p.stock + parseInt(qty) } : p));
-    const success = await sendToSheet({ action: 'DELETE_SALE', id: saleId, sku, qty });
+    
+    // Enviamos el motivo al backend
+    const success = await sendToSheet({ action: 'DELETE_SALE', id: saleId, sku, qty, reason: reasonFinal });
     if (!success) { setSales(prevSales); setProducts(prevProducts); alert("Error al anular venta"); } 
     else { setLoading(false); alert("Venta anulada correctamente"); }
   };
 
   const deleteProduct = async (id: any) => {
-    if (!confirm("⚠️ ¿Estás seguro de eliminar este producto PERMANENTEMENTE del inventario?")) return;
+    // MODIFICADO: Ahora pide un motivo
+    const reason = prompt("⚠️ Estás a punto de eliminar este producto PERMANENTEMENTE.\n\nEscribe el motivo (Ej. 'Merma', 'Error de ingreso', 'Regalo'):");
+    if (reason === null) return; // Si cancela, no hace nada
+
+    const reasonFinal = reason.trim() === "" ? "Sin motivo especificado" : reason;
+
     setLoading(true);
     const prevProducts = [...products];
     setProducts(products.filter(p => p.id !== id));
-    const success = await sendToSheet({ action: 'DELETE_PRODUCT', id: id });
+    
+    // Enviamos el motivo al backend
+    const success = await sendToSheet({ action: 'DELETE_PRODUCT', id: id, reason: reasonFinal });
     if (!success) { setProducts(prevProducts); alert("Error al eliminar producto"); } 
     else { setLoading(false); alert("Producto eliminado"); }
   };
 
   const deleteExpense = async (id: any) => {
-    if (!confirm("¿Eliminar este gasto?")) return;
+    // MODIFICADO: Ahora pide un motivo
+    const reason = prompt("⚠️ Estás eliminando un gasto registrado.\n\nEscribe el motivo (Ej. 'Duplicado', 'Error de monto'):");
+    if (reason === null) return; // Si cancela, no hace nada
+
+    const reasonFinal = reason.trim() === "" ? "Sin motivo especificado" : reason;
+
     setLoading(true);
     const prevExpenses = [...expenses];
     setExpenses(expenses.filter(e => e.id !== id));
-    const success = await sendToSheet({ action: 'DELETE_EXPENSE', id: id });
+    
+    // Enviamos el motivo al backend
+    const success = await sendToSheet({ action: 'DELETE_EXPENSE', id: id, reason: reasonFinal });
     if (!success) { setExpenses(prevExpenses); alert("Error al eliminar gasto"); } 
     else { setLoading(false); alert("Gasto eliminado"); }
   };
