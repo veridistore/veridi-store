@@ -55,9 +55,14 @@ const styles = {
   logoImg: { height: '80px', objectFit: 'contain' },
   logoText: { fontSize: '1.8rem', fontWeight: 'bold', color: 'white', background: '#dc2626', padding: '10px 20px', borderRadius: '5px' },
   headerControls: { display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' },
-  exchangeRateBox: { display: 'flex', alignItems: 'center', gap: '10px', background: '#1e293b', padding: '5px 15px', borderRadius: '20px', border: '1px solid #475569' },
-  exchangeInput: { width: '80px', padding: '5px', borderRadius: '5px', border: 'none', background: '#0f172a', color: '#4ade80', textAlign: 'center' as 'center', fontWeight: 'bold' },
-  refreshBtn: { background: 'transparent', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '1.2rem', padding: '0 5px', display: 'flex', alignItems: 'center' },
+  exchangeRateBox: { display: 'flex', alignItems: 'center', gap: '10px', background: '#1e293b', padding: '10px 20px', borderRadius: '10px', border: '1px solid #475569' },
+  // AUMENTADO: Tamaño de letra para el input del TC y cambio de color dinámico en el componente
+  exchangeInput: (isLive: boolean) => ({ 
+    width: '100px', padding: '5px', borderRadius: '5px', border: 'none', background: '#0f172a', 
+    color: isLive ? '#4ade80' : '#ef4444', // Verde si es live, Rojo si falló/manual
+    textAlign: 'center' as 'center', fontWeight: 'bold', fontSize: '1.4rem' 
+  }),
+  refreshBtn: { background: 'transparent', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '1.5rem', padding: '0 5px', display: 'flex', alignItems: 'center' },
   nav: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
   navBtn: (active: boolean) => ({
     background: active ? '#2563eb' : 'transparent', color: 'white', border: active ? 'none' : '1px solid #475569',
@@ -101,6 +106,8 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
   const [exchangeRate, setExchangeRate] = useState<any>(3.75); 
+  // ESTADO NUEVO: Controla si la conexión fue exitosa (true) o fallida/manual (false)
+  const [isRateConnected, setIsRateConnected] = useState(false);
   const [updatingRate, setUpdatingRate] = useState(false);
   const [logoError, setLogoError] = useState(false);
 
@@ -143,25 +150,33 @@ export default function App() {
 
   const fetchExchangeRate = async () => {
     setUpdatingRate(true);
+    // Reiniciamos estado de conexión a false antes de intentar
+    setIsRateConnected(false);
     try {
         const response = await fetch(`${SUNAT_API_BASE}?_=${Date.now()}`); 
         const data = await response.json();
         if (data && data.venta) {
             setExchangeRate(data.venta);
+            setIsRateConnected(true); // ¡Éxito! Verde
         } else {
-            throw new Error("Formato incorrecto o sin datos SUNAT");
+            throw new Error("Sin datos SUNAT");
         }
     } catch (err) {
+        // Falló SUNAT, intentamos backup silenciosamente
         try {
             const resFallback = await fetch(FALLBACK_API);
             const dataFallback = await resFallback.json();
             if (dataFallback && dataFallback.rates && dataFallback.rates.PEN) {
                 setExchangeRate(dataFallback.rates.PEN);
-                alert("⚠️ Ojo: No se pudo conectar con SUNAT. Se usó el T.C. internacional referencial.");
+                // Fallback es útil pero no es SUNAT oficial, lo dejamos en rojo o podríamos usar ámbar. 
+                // Por simplicidad, rojo indica "Verificar", verde "Oficial".
+                setIsRateConnected(false); 
             }
         } catch (err2) {
-            console.error("Error total obteniendo TC", err2);
+            console.error("Error total TC", err2);
+            setIsRateConnected(false);
         }
+        // Eliminada la alerta (alert) para que no moleste
     } finally {
         setUpdatingRate(false);
     }
@@ -202,7 +217,6 @@ export default function App() {
     return currency === 'USD' ? val * rate : val;
   };
 
-  // Filtros por periodo
   const filteredSales = sales.filter(s => {
     const [y, m] = s.date.split('-'); 
     return parseInt(y) === reportYear && parseInt(m) === reportMonth;
@@ -213,7 +227,6 @@ export default function App() {
     return parseInt(y) === reportYear && parseInt(m) === reportMonth;
   });
 
-  // Datos Base
   const incomeTotal = filteredSales.reduce((acc, s) => acc + toPEN(s.total, s.currency, s.exchangeRate), 0);
   const cogsTotal = filteredSales.reduce((acc, s) => {
       const p = products.find(prod => safeString(prod.sku) === safeString(s.sku));
@@ -225,26 +238,24 @@ export default function App() {
   const netProfit = grossProfit - expensesTotal;
   const inventoryValue = products.reduce((acc, p) => acc + (toPEN(p.cost, p.currency, exchangeRate) * parseInt(p.stock)), 0);
 
-  // --- INDICADORES PLAN DE NEGOCIOS ---
-  // 1. Margen Bruto % (Meta 30%)
-  const grossMarginPercent = incomeTotal > 0 ? (grossProfit / incomeTotal) * 100 : 0;
+  // --- DESGLOSE DE GASTOS PARA REPORTE ---
+  const expenseBreakdown = filteredExpenses.reduce((acc: any, curr) => {
+      const type = curr.type || 'Otros';
+      const amount = toPEN(curr.amount, curr.currency, curr.exchangeRate);
+      acc[type] = (acc[type] || 0) + amount;
+      return acc;
+  }, {});
   
-  // 2. Ticket Promedio (AOV) (Meta $100-$150)
+  // --- INDICADORES PLAN DE NEGOCIOS ---
+  const grossMarginPercent = incomeTotal > 0 ? (grossProfit / incomeTotal) * 100 : 0;
   const totalOrders = filteredSales.length;
   const aovPEN = totalOrders > 0 ? incomeTotal / totalOrders : 0;
-  const aovUSD = aovPEN / exchangeRate; // Para comparar con la meta en USD
-
-  // 3. CAC (Costo Adquisición Clientes) (Meta < 25% AOV)
-  // Filtramos gastos de Publicidad
+  const aovUSD = aovPEN / exchangeRate; 
   const marketingExpenses = filteredExpenses.filter(e => safeString(e.type).includes('publicidad') || safeString(e.type).includes('marketing')).reduce((acc, e) => acc + toPEN(e.amount, e.currency, e.exchangeRate), 0);
-  // Contamos clientes únicos en el periodo (por DNI)
   const uniqueCustomers = new Set(filteredSales.map(s => s.docNum)).size;
   const cacPEN = uniqueCustomers > 0 ? marketingExpenses / uniqueCustomers : 0;
-  
-  // Meta CAC: 25% del AOV actual
   const targetCacMax = aovPEN * 0.25;
 
-  // -- MANEJADORES FORMULARIOS --
   const handleImageUpload = (e: any) => {
     const file = e.target.files[0];
     if (file) {
@@ -418,7 +429,6 @@ export default function App() {
     setNewSale((prev: any) => ({ ...prev, sku: val, size: found ? found.size : prev.size, color: found ? found.color : prev.color, model: found ? found.model : prev.model })); 
   };
 
-  // --- RENDER LOGIN SCREEN ---
   if (!isAuthenticated) {
     return (
         <div style={styles.loginContainer}>
@@ -472,14 +482,12 @@ export default function App() {
         </div>
       </div>
 
-      {/* 2. NUEVA SECCIÓN: KPIs PLAN DE NEGOCIOS */}
+      {/* 2. KPIS PLAN DE NEGOCIOS */}
       <div style={{...styles.card, border: '1px solid #60a5fa'}}>
         <h3 style={{color: '#fbbf24', borderBottom: '1px solid #475569', paddingBottom: '10px', marginBottom: '20px'}}>
             🎯 KPIs Estratégicos (Plan de Negocios)
         </h3>
         <div style={{display: 'flex', gap: '20px', flexWrap: 'wrap'}}>
-            
-            {/* KPI 1: Margen Bruto */}
             <div style={styles.kpiCard}>
                 <div style={styles.label}>1. Margen Bruto</div>
                 <div style={{fontSize: '2rem', fontWeight: 'bold', color: grossMarginPercent >= 30 ? '#4ade80' : '#f87171'}}>
@@ -491,7 +499,6 @@ export default function App() {
                 </div>
             </div>
 
-            {/* KPI 2: Ticket Promedio (AOV) */}
             <div style={styles.kpiCard}>
                 <div style={styles.label}>2. Ticket Promedio (AOV)</div>
                 <div style={{fontSize: '2rem', fontWeight: 'bold', color: aovUSD >= 100 ? '#4ade80' : '#fbbf24'}}>
@@ -503,7 +510,6 @@ export default function App() {
                 </div>
             </div>
 
-            {/* KPI 3: CAC vs AOV */}
             <div style={styles.kpiCard}>
                 <div style={styles.label}>3. Costo Adquisición (CAC)</div>
                 <div style={{fontSize: '2rem', fontWeight: 'bold', color: (cacPEN <= targetCacMax && cacPEN > 0) ? '#4ade80' : (cacPEN === 0 ? '#94a3b8' : '#f87171')}}>
@@ -514,7 +520,6 @@ export default function App() {
                     {cacPEN === 0 ? 'ℹ️ Sin gastos de Publicidad' : (cacPEN <= targetCacMax ? '✅ Rentabilidad OK' : '⚠️ Optimizar Ads')}
                 </div>
             </div>
-
         </div>
       </div>
 
@@ -545,6 +550,19 @@ export default function App() {
             <span>(-) Gastos Operativos</span>
             <span>(S/ {expensesTotal.toLocaleString('es-PE', {minimumFractionDigits: 2})})</span>
           </div>
+          
+          {/* DESGLOSE DE GASTOS */}
+          {expensesTotal > 0 && (
+            <div style={{background: '#f1f5f9', padding: '10px', borderRadius: '5px', marginTop: '5px', fontSize: '0.85rem'}}>
+                <div style={{fontWeight: 'bold', color: '#475569', marginBottom: '5px'}}>Detalle de Gastos:</div>
+                {Object.keys(expenseBreakdown).sort((a,b) => expenseBreakdown[b] - expenseBreakdown[a]).map(type => (
+                    <div key={type} style={{display: 'flex', justifyContent: 'space-between', color: '#64748b'}}>
+                        <span>• {type}</span>
+                        <span>S/ {expenseBreakdown[type].toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
+                    </div>
+                ))}
+            </div>
+          )}
 
           <div style={{...styles.reportRow(true, true), marginTop: '20px', fontSize: '1.3rem', borderBottom: '4px double #000'}}>
             <span>(=) UTILIDAD NETA</span>
@@ -624,118 +642,6 @@ export default function App() {
     </div>
   );
 
-  const renderSales = () => (
-    <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
-      <div style={{...styles.card, flex: 1.2}}>
-        <h3>Nueva Venta</h3>
-        <div style={styles.inputGroup}><label style={styles.label}>Fecha Venta</label><input type="date" style={styles.input} value={newSale.date} onChange={(e:any) => setNewSale({...newSale, date: e.target.value})} /></div>
-        <div style={styles.sectionTitle}>1. Producto</div>
-        <div style={styles.inputGroup}><label style={styles.label}>SKU (Escanear)</label><input style={styles.input} value={newSale.sku} onChange={handleSkuChange} autoFocus placeholder="Escanea aquí..." />
-        {newSale.sku && foundProduct ? <div style={styles.productInfo}>✅ Producto encontrado</div> : null}</div>
-        
-        <div style={styles.inputGroup}><label style={styles.label}>Nombre del Producto</label><input style={styles.inputDisabled} value={foundProduct ? foundProduct.name : ''} readOnly placeholder="Se llena automáticamente al ingresar SKU" /></div>
-
-        <div style={styles.grid}>
-          <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Talla</label><input style={styles.input} value={newSale.size} onChange={(e:any) => setNewSale({...newSale, size: e.target.value})} /></div>
-          <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Color</label><input style={styles.input} value={newSale.color} onChange={(e:any) => setNewSale({...newSale, color: e.target.value})} /></div>
-        </div>
-        <div style={styles.grid}>
-            <div style={{...styles.inputGroup, flex: 2}}><label style={styles.label}>Boleta Nº</label><input style={styles.input} value={newSale.ticketNo} onChange={(e:any) => setNewSale({...newSale, ticketNo: e.target.value})} /></div>
-            <div style={{...styles.inputGroup, flex: 2}}>
-                <label style={styles.label}>Precio</label>
-                <div style={styles.inputWrapper}>
-                    <input type="number" style={styles.input} value={newSale.price} onChange={(e:any) => setNewSale({...newSale, price: e.target.value})} />
-                    <select style={styles.selectCurrency} value={newSale.currency} onChange={(e:any) => setNewSale({...newSale, currency: e.target.value})}><option value="PEN">S/</option><option value="USD">$</option></select>
-                </div>
-            </div>
-        </div>
-        <div style={styles.sectionTitle}>2. Cliente</div>
-        <div style={styles.inputGroup}><label style={styles.label}>Nombre Completo</label><input style={styles.input} value={newSale.customerName} onChange={(e:any) => setNewSale({...newSale, customerName: e.target.value})} /></div>
-        <div style={styles.grid}>
-            <div style={{...styles.inputGroup, flex: 1}}>
-                <label style={styles.label}>Doc.</label>
-                <select style={styles.select} value={newSale.docType} onChange={(e:any) => setNewSale({...newSale, docType: e.target.value})}>
-                    <option>DNI</option><option>CE</option><option>Pasaporte</option><option>Otro</option>
-                </select>
-            </div>
-            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Número</label><input style={styles.input} value={newSale.docNum} onChange={(e:any) => setNewSale({...newSale, docNum: e.target.value})} /></div>
-        </div>
-        <div style={styles.grid}>
-            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Teléfono</label><input style={styles.input} value={newSale.phone} onChange={(e:any) => setNewSale({...newSale, phone: e.target.value})} /></div>
-            <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Email</label><input style={styles.input} type="email" value={newSale.email} onChange={(e:any) => setNewSale({...newSale, email: e.target.value})} /></div>
-        </div>
-
-        <div style={styles.sectionTitle}>3. Envío y Orden</div>
-        
-        <div style={styles.inputGroup}><label style={styles.label}>Compra en conjunto - N° de boleta</label><input style={styles.input} value={newSale.batchId} onChange={(e:any) => setNewSale({...newSale, batchId: e.target.value})} placeholder="Ej: Lote #54" /></div>
-        
-        <div style={styles.inputGroup}>
-            <label style={styles.label}>¿Quién Recibe?</label>
-            <select style={styles.select} value={newSale.receiverType} onChange={(e:any) => setNewSale({...newSale, receiverType: e.target.value})}>
-                <option>Yo</option><option>Otra Persona</option>
-            </select>
-        </div>
-
-        {newSale.receiverType === 'Otra Persona' && (
-            <div style={{background: '#334155', padding: 10, borderRadius: 5, marginBottom: 15}}>
-                <div style={styles.inputGroup}><label style={styles.label}>Nombre Receptor</label><input style={styles.input} value={newSale.receiverName} onChange={(e:any) => setNewSale({...newSale, receiverName: e.target.value})} /></div>
-                <div style={styles.grid}>
-                    <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>DNI Rec.</label><input style={styles.input} value={newSale.receiverDoc} onChange={(e:any) => setNewSale({...newSale, receiverDoc: e.target.value})} /></div>
-                    <div style={{...styles.inputGroup, flex: 1}}><label style={styles.label}>Tel Rec.</label><input style={styles.input} value={newSale.receiverPhone} onChange={(e:any) => setNewSale({...newSale, receiverPhone: e.target.value})} /></div>
-                </div>
-            </div>
-        )}
-
-        <div style={{background: '#334155', padding: 10, borderRadius: 5, marginBottom: 15}}>
-            <label style={{...styles.label, color: '#60a5fa', fontWeight: 'bold'}}>Ubicación de Envío</label>
-            <div style={styles.grid}>
-                <div style={{...styles.inputGroup, flex: 1}}>
-                    <label style={styles.label}>Departamento</label>
-                    <select style={styles.select} value={newSale.department} onChange={handleDepartmentChange}>
-                        <option value="">Seleccione...</option>
-                        {Object.keys(peruLocations).map(dept => <option key={dept} value={dept}>{dept}</option>)}
-                    </select>
-                </div>
-                <div style={{...styles.inputGroup, flex: 1}}>
-                    <label style={styles.label}>Provincia</label>
-                    <select style={styles.select} value={newSale.province} onChange={handleProvinceChange} disabled={!newSale.department}>
-                        <option value="">Seleccione...</option>
-                        {getProvinces().map((prov: string) => <option key={prov} value={prov}>{prov}</option>)}
-                    </select>
-                </div>
-                <div style={{...styles.inputGroup, flex: 1}}>
-                    <label style={styles.label}>Distrito</label>
-                    <select style={styles.select} value={newSale.district} onChange={(e:any) => setNewSale({...newSale, district: e.target.value})} disabled={!newSale.province}>
-                        <option value="">Seleccione...</option>
-                        {getDistricts().map((dist: string) => <option key={dist} value={dist}>{dist}</option>)}
-                    </select>
-                </div>
-            </div>
-            <div style={styles.inputGroup}><label style={styles.label}>Dirección Exacta</label><input style={styles.input} value={newSale.address} onChange={(e:any) => setNewSale({...newSale, address: e.target.value})} placeholder="Av. Principal 123..." /></div>
-            
-            <div style={styles.inputGroup}><label style={styles.label}>Referencia</label><input style={styles.input} value={newSale.reference} onChange={(e:any) => setNewSale({...newSale, reference: e.target.value})} placeholder="Ej: Frente al parque, puerta azul..." /></div>
-        </div>
-
-        <div style={styles.inputGroup}><label style={styles.label}>Costo Envío (S/)</label><input type="number" style={styles.input} value={newSale.shippingCost} onChange={(e:any) => setNewSale({...newSale, shippingCost: e.target.value})} placeholder="0.00" /></div>
-        
-        <button style={loading ? styles.btnLoading : styles.btnPrimary} onClick={addSale} disabled={loading}>{loading ? 'Registrando...' : 'Confirmar Venta'}</button>
-      </div>
-      <div style={{...styles.card, flex: 1.8, overflowX: 'auto'}}>
-        <h3>Últimas Ventas</h3>
-        <table style={styles.table}><thead><tr><th>Fecha</th><th>Boleta</th><th>Prod</th><th>Cliente</th><th>Total</th></tr></thead>
-        <tbody>{sales.slice(-10).reverse().map(s => (
-            <tr key={s.id}>
-                <td style={styles.td}>{formatDisplayDate(s.date)}</td>
-                <td style={styles.td}>{s.ticketNo || '-'}</td>
-                <td style={styles.td}>{s.productName}</td>
-                <td style={styles.td}>{s.customerName}</td>
-                <td style={styles.td}>{s.currency === 'USD' ? '$' : 'S/'} {parseFloat(s.total).toFixed(2)}</td>
-            </tr>
-        ))}</tbody></table>
-      </div>
-    </div>
-  );
-
   const renderExpenses = () => (
     <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
       <div style={{...styles.card, flex: 1}}>
@@ -743,8 +649,20 @@ export default function App() {
         <div style={styles.inputGroup}><label style={styles.label}>Fecha</label><input type="date" style={styles.input} value={newExpense.date} onChange={(e:any) => setNewExpense({...newExpense, date: e.target.value})} /></div>
         <div style={styles.inputGroup}><label style={styles.label}>Tipo</label>
             <select style={styles.select} value={newExpense.type} onChange={(e:any) => setNewExpense({...newExpense, type: e.target.value})}>
-                <option>Seguro</option><option>Publicidad</option><option>Pag. Web</option><option>Comisión</option><option>Aplicaciones</option>
-                <option>Alimentación</option><option>Vuelo</option><option>Hotel</option><option>Aduanas</option><option>Movilidad</option><option>Otros</option><option>Envío</option>
+                <option>Publicidad</option>
+                <option>Sueldo Dueños</option>
+                <option>Comisión</option>
+                <option>Teléfono/Internet</option>
+                <option>Apps/Software</option>
+                <option>Seguro</option>
+                <option>Alimentación</option>
+                <option>Movilidad</option>
+                <option>Vuelo</option>
+                <option>Hotel</option>
+                <option>Aduanas</option>
+                <option>Envío</option>
+                <option>Pag. Web</option>
+                <option>Otros</option>
             </select>
         </div>
         <div style={styles.inputGroup}><label style={styles.label}>Concepto</label><input style={styles.input} value={newExpense.desc} onChange={(e:any) => setNewExpense({...newExpense, desc: e.target.value})} /></div>
@@ -764,129 +682,6 @@ export default function App() {
     </div>
   );
 
-  const renderVoid = () => (
-    <div style={{...styles.card}}>
-      <h3 style={{color:'#f87171'}}>⚠️ Anulación de Ventas (Stock retorna)</h3>
-      <div style={{marginBottom: 20}}>
-        <label style={styles.label}>Buscar Venta (DD/MM/AAAA, Boleta, SKU, DNI):</label>
-        <input style={styles.searchBar} placeholder="Ej: 25/12/2023 o Boleta 001..." value={voidSearchTerm} onChange={e => setVoidSearchTerm(e.target.value)} />
-      </div>
-      <div style={{overflowX:'auto'}}>
-      <table style={styles.table}>
-        <thead><tr><th>Fecha</th><th>Boleta</th><th>Cliente (DNI)</th><th>Producto</th><th>Total</th><th>Acción</th></tr></thead>
-        <tbody>
-          {voidFilteredSales.map(s => (
-            <tr key={s.id}>
-              <td style={styles.td}>{formatDisplayDate(s.date)}</td>
-              <td style={styles.td}>{s.ticketNo || 'S/N'}</td>
-              <td style={styles.td}>{s.customerName} {s.docNum ? `(${s.docNum})` : ''}</td>
-              <td style={styles.td}>{s.productName} ({s.sku})</td>
-              <td style={styles.td}>{s.currency === 'USD' ? '$' : 'S/'} {parseFloat(s.total).toFixed(2)}</td>
-              <td style={styles.td}>
-                <button style={styles.btnDelete} onClick={() => voidSale(s.id, s.sku, s.qty)}>ANULAR 🗑️</button>
-              </td>
-            </tr>
-          ))}
-          {voidFilteredSales.length === 0 && <tr><td colSpan={6} style={{padding: 20, textAlign: 'center', color: '#94a3b8'}}>No se encontraron ventas con esos datos.</td></tr>}
-        </tbody>
-      </table>
-      </div>
-    </div>
-  );
-
-  const renderAdminVoid = () => (
-      <div style={{display: 'flex', gap: '20px', flexDirection: window.innerWidth < 768 ? 'column' : 'row'}}>
-        <div style={{...styles.card, flex: 1}}>
-            <h3 style={{color:'#fb923c'}}>🗑️ Eliminar Producto (Inventario)</h3>
-            <p style={{fontSize:'0.8rem', color:'#94a3b8'}}>Cuidado: Esto borra el producto permanentemente.</p>
-            <input style={styles.searchBar} placeholder="Buscar SKU o Nombre..." value={adminProductSearch} onChange={e => setAdminProductSearch(e.target.value)} />
-            <div style={{overflowY: 'auto', maxHeight: '400px'}}>
-                <table style={styles.table}>
-                    <thead><tr><th>SKU</th><th>Nombre</th><th>Acción</th></tr></thead>
-                    <tbody>
-                        {adminFilteredProducts.map(p => (
-                            <tr key={p.id}>
-                                <td style={styles.td}>{p.sku}</td>
-                                <td style={styles.td}>{p.name}</td>
-                                <td style={styles.td}><button style={styles.btnDelete} onClick={() => deleteProduct(p.id)}>X</button></td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div style={{...styles.card, flex: 1}}>
-            <h3 style={{color:'#fb923c'}}>🗑️ Eliminar Gasto</h3>
-            <p style={{fontSize:'0.8rem', color:'#94a3b8'}}>Borra el registro financiero.</p>
-            <input style={styles.searchBar} placeholder="Buscar Concepto o Monto..." value={adminExpenseSearch} onChange={e => setAdminExpenseSearch(e.target.value)} />
-            <div style={{overflowY: 'auto', maxHeight: '400px'}}>
-                <table style={styles.table}>
-                    <thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th><th>Acción</th></tr></thead>
-                    <tbody>
-                        {adminFilteredExpenses.map(e => (
-                            <tr key={e.id}>
-                                <td style={styles.td}>{formatDisplayDate(e.date)}</td>
-                                <td style={styles.td}>{e.desc}</td>
-                                <td style={styles.td}>{e.amount}</td>
-                                <td style={styles.td}><button style={styles.btnDelete} onClick={() => deleteExpense(e.id)}>X</button></td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-      </div>
-  );
-
-  const renderGlobalSearch = () => {
-      const results = getFilteredResults();
-      return (
-        <div style={styles.card}>
-            <h3>🔍 Búsqueda Avanzada Universal</h3>
-            <div style={{display: 'flex', gap: 10, marginBottom: 20}}>
-                <button style={styles.navBtn(searchTab === 'inventory')} onClick={() => setSearchTab('inventory')}>Inventario</button>
-                <button style={styles.navBtn(searchTab === 'sales')} onClick={() => setSearchTab('sales')}>Ventas</button>
-                <button style={styles.navBtn(searchTab === 'expenses')} onClick={() => setSearchTab('expenses')}>Gastos</button>
-            </div>
-            
-            <input style={styles.searchBar} placeholder="Escribe para buscar (Fecha, SKU, Tienda, DNI, Dirección, etc)..." value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} autoFocus />
-
-            <div style={{overflowX:'auto'}}>
-            <table style={styles.table}>
-                <thead>
-                    {searchTab === 'inventory' && <tr><th>Fecha</th><th>SKU</th><th>Producto</th><th>Tienda</th><th>Stock</th></tr>}
-                    {searchTab === 'sales' && <tr><th>Fecha</th><th>Boleta</th><th>Cliente</th><th>Dirección</th><th>Total</th></tr>}
-                    {searchTab === 'expenses' && <tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Monto</th></tr>}
-                </thead>
-                <tbody>
-                    {results.length > 0 ? results.map((r: any) => (
-                        <tr key={r.id}>
-                            <td style={styles.td}>{formatDisplayDate(r.date)}</td>
-                            
-                            {searchTab === 'inventory' && <>
-                                <td style={styles.td}>{r.sku}</td><td style={styles.td}>{r.name}</td><td style={styles.td}>{r.store}</td><td style={styles.td}>{r.stock}</td>
-                            </>}
-
-                            {searchTab === 'sales' && <>
-                                <td style={styles.td}>{r.ticketNo}</td>
-                                <td style={styles.td}>{r.customerName} ({r.docNum})</td>
-                                <td style={styles.td}>{r.address || `${r.department}-${r.district}`}</td>
-                                <td style={styles.td}>{r.currency === 'USD' ? '$' : 'S/'} {parseFloat(r.total).toFixed(2)}</td>
-                            </>}
-
-                            {searchTab === 'expenses' && <>
-                                <td style={styles.td}>{r.type}</td><td style={styles.td}>{r.desc}</td><td style={styles.td}>{r.currency === 'USD' ? '$' : 'S/'} {parseFloat(r.amount).toFixed(2)}</td>
-                            </>}
-                        </tr>
-                    )) : <tr><td colSpan={5} style={{textAlign: 'center', padding: 20, color: '#94a3b8'}}>No se encontraron resultados</td></tr>}
-                </tbody>
-            </table>
-            </div>
-        </div>
-      );
-  }
-
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -896,7 +691,17 @@ export default function App() {
         <div style={styles.headerControls}>
           <div style={styles.exchangeRateBox}>
             <span style={{color: '#94a3b8', fontSize: '0.9rem'}}>T.C. (SUNAT/Intl): $1 = S/</span>
-            <input type="number" step="0.01" style={styles.exchangeInput} value={exchangeRate} onChange={(e:any) => setExchangeRate(e.target.value)} />
+            {/* INPUT DINAMICO CON COLOR VERDE/ROJO */}
+            <input 
+                type="number" 
+                step="0.01" 
+                style={styles.exchangeInput(isRateConnected)} 
+                value={exchangeRate} 
+                onChange={(e:any) => {
+                    setExchangeRate(e.target.value);
+                    setIsRateConnected(false); // Si editas manual, se pone rojo
+                }} 
+            />
             <button style={styles.refreshBtn} onClick={fetchExchangeRate} title="Forzar Actualización" disabled={updatingRate}>
                 {updatingRate ? '...' : '🔄'}
             </button>
