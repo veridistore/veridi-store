@@ -316,14 +316,28 @@ export default function App() {
 
     const prevSales = [...sales]; const prevProducts = [...products]; const prevExpenses = [...expenses];
 
+    // Actualizamos Localmente Ventas y Stock
     setSales([...sales, saleData]);
     setProducts(products.map(p => safeString(p.sku) === safeString(newSale.sku) ? { ...p, stock: p.stock - qty } : p));
     
+    // --- CORRECCIÓN: MANEJO DEL GASTO DE ENVÍO ---
     if(saleData.shippingCost && parseFloat(saleData.shippingCost) > 0) {
-       setExpenses([...expenses, {
-         id: Date.now(), date: saleData.date, type: 'Envío', desc: `Envío ${saleData.department}-${saleData.district} (${saleData.ticketNo})`, 
-         amount: parseFloat(saleData.shippingCost), currency: saleData.currency, exchangeRate: saleData.exchangeRate
-       }]);
+       // Creamos objeto gasto
+       const shippingExpense = {
+         id: Date.now() + 50, // Offset pequeño para que el ID sea distinto al de la venta si ocurren en el mismo milisegundo
+         date: saleData.date, 
+         type: 'Envío', 
+         desc: `Envío ${saleData.department}-${saleData.district} (${saleData.ticketNo})`, 
+         amount: parseFloat(saleData.shippingCost), 
+         currency: saleData.currency, 
+         exchangeRate: saleData.exchangeRate
+       };
+
+       // 1. Actualizar visualmente (local)
+       setExpenses(prev => [...prev, shippingExpense]);
+
+       // 2. ENVIAR A GOOGLE SHEET (Acción: ADD_EXPENSE) - ESTO FALTABA
+       await sendToSheet({ action: 'ADD_EXPENSE', ...shippingExpense });
     }
 
     setNewSale({ 
@@ -334,6 +348,7 @@ export default function App() {
       department: '', province: '', district: '' 
     });
 
+    // Enviamos la Venta a Google Sheet
     const success = await sendToSheet({ action: 'ADD_SALE', ...saleData });
     if (!success) { setSales(prevSales); setProducts(prevProducts); setExpenses(prevExpenses); alert("Error guardando venta"); }
   };
