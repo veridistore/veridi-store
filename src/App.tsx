@@ -3,8 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 // --- CONFIGURACIÓN DE SEGURIDAD ---
 const APP_PASSWORD = "Meraly123"; 
 
-// --- TU URL DE GOOGLE SCRIPT ---
-const API_URL = "https://script.google.com/macros/s/AKfycbyTtKl1Q73tn29ySdLd4UObvbHQXCVuaVB1DvSZwZUVAOStlOYnktg3MiUhN6zQp2itCA/exec";
+// --- TU URL DE GOOGLE SCRIPT (ACTUALIZADA) ---
+const API_URL = "https://script.google.com/macros/s/AKfycby5ju2yfK1a-JbohRA_ib6GPsNoEjJnrgf_kVTKh0VKv7Db5tgRqJp9S53HHPuZgo7B/exec";
 
 // --- APIs TIPO DE CAMBIO (Principal y Respaldo) ---
 const SUNAT_API_BASE = "https://api.apis.net.pe/v1/tipo-cambio-sunat";
