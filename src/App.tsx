@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 // --- CONFIGURACIÓN DE SEGURIDAD ---
-const APP_PASSWORD = "Meraly123"; 
+const APP_PASSWORD = "meraly123"; 
 
 // --- TU URL DE GOOGLE SCRIPT (ACTUALIZADA) ---
 const API_URL = "https://script.google.com/macros/s/AKfycby5ju2yfK1a-JbohRA_ib6GPsNoEjJnrgf_kVTKh0VKv7Db5tgRqJp9S53HHPuZgo7B/exec";
